@@ -371,12 +371,13 @@ custom-rules: []
 
 # Blacklist: agent discovery dirs, optional ai-workflows vendors, and artifacts.
 exclude:
-  # Agent dirs: symlinks to skills/ or gitignored
+  # Agent dirs: symlinks to skills/ or gitignored. .claude/rules/** and
+  # .claude/agents/** are NOT excluded here — they hold real canonical
+  # content (same files fanned out to consumers) and should be linted.
   - ".cursor/**"
   - ".gemini/**"
   - ".claude/skills/**"
   - ".claude/commands/**"
-  - ".claude/agents/**"
   # ai-workflows skill symlink names under skills/ (if a consumer wires them)
   - "**/bugfix/**"
   - "**/design/**"

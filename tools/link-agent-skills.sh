@@ -11,16 +11,32 @@
 # Optionally wires flightctl/ai-workflows skill symlinks under skills/ when
 # ~/.ai-workflows or ./.ai-workflows is present. Consumers that need those
 # workflows still bootstrap ai-workflows themselves (e.g. osac/tools/bootstrap.sh).
+#
+# Also materializes shared content from this repo's own .claude/rules/,
+# .claude/agents/, .design/context/, and reference/ into the consumer's tree
+# (per-file symlinks, alongside any consumer-local files in the same dirs):
+#   .claude/rules/<name>.md   -> <this repo>/.claude/rules/<name>.md
+#   .claude/agents/<name>.md  -> <this repo>/.claude/agents/<name>.md
+#   .design/context/<name>.md -> <this repo>/.design/context/<name>.md
+#   reference/<name>.md       -> <this repo>/reference/<name>.md
+# Rules/agents are Claude-only today (no Cursor/Gemini equivalent format to
+# fan the same raw content out to). design/context and reference are
+# agent-agnostic — they're read by skill instructions (prd-review,
+# design-review, ai-workflows prd/design), not by any one coding agent's
+# auto-attach mechanism.
+# OSAC-4006: centralized here (not duplicated per-consumer) so both osac and
+# osac-workspace pick this up automatically once they vendor+exec this script.
 set -euo pipefail
 
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
+REPO_ROOT="$(realpath "${SCRIPT_DIR}/..")"
 # Consumers (osac-workspace, osac) may set PROJECT_ROOT to their own tree so
 # agent links and --with-ai-workflows materialize there instead of inside this
-# skills repo. Unset → standalone clone behavior (repo root).
+# skills repo. Unset → standalone clone behavior (repo root == REPO_ROOT).
 if [[ -n "${PROJECT_ROOT:-}" ]]; then
   PROJECT_ROOT="$(realpath "${PROJECT_ROOT}")"
 else
-  PROJECT_ROOT="$(realpath "${SCRIPT_DIR}/..")"
+  PROJECT_ROOT="${REPO_ROOT}"
 fi
 
 OSAC_SKILLS=(
@@ -47,6 +63,11 @@ OSAC_SKILLS=(
 
 AI_WORKFLOW_SKILLS=(bugfix design e2e implement prd)
 
+SHARED_RULES=(architecture-patterns networking-design-alignment request-path-tracing)
+SHARED_AGENTS=(quick-fix)
+SHARED_DESIGN_CONTEXT=(enclave-wizard-pipeline networking-decisions osac-dimensions review-patterns)
+SHARED_REFERENCE=(ARCHITECTURE)
+
 LINK_CLAUDE=false
 LINK_CURSOR=false
 LINK_GEMINI=false
@@ -64,6 +85,12 @@ Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--all] [--with-ai-work
   --with-ai-workflows   Also symlink flightctl/ai-workflows under skills/ (opt-in;
                         consumers that bootstrap ai-workflows pass this)
   --verify              Verify symlinks and OSAC skill files; exit non-zero on failure
+
+Always materializes .design/context/*.md and reference/*.md (agent-agnostic;
+read by skill instructions, not by any one coding agent's auto-attach
+mechanism).
+When --claude (or --all) is passed, also materializes shared rules
+(.claude/rules/*.md) and agents (.claude/agents/*.md).
 EOF
 }
 
@@ -120,6 +147,42 @@ link_canonical_ai_workflows() {
       echo "  Linked skills/${wf} -> ${ai_dir}/${wf}"
     fi
   done
+}
+
+# Symlinks $PROJECT_ROOT/$rel_dir/<name>.md -> this repo's own $rel_dir/<name>.md
+# for each name in the given list. No-op in standalone mode (PROJECT_ROOT is
+# this same repo) — the canonical files already live at that exact path, so
+# symlinking a file onto itself would trip safe_symlink's real-file guard.
+materialize_shared_dir() {
+  local rel_dir="$1" label="$2"
+  shift 2
+  local names=("$@")
+  local name
+
+  if [[ "${PROJECT_ROOT}" == "${REPO_ROOT}" ]]; then
+    return 0
+  fi
+  mkdir -p "${PROJECT_ROOT}/${rel_dir}"
+  for name in "${names[@]}"; do
+    safe_symlink "${PROJECT_ROOT}/${rel_dir}/${name}.md" "${REPO_ROOT}/${rel_dir}/${name}.md"
+    echo "  Linked ${rel_dir}/${name}.md -> osac-ai-skills/${rel_dir}/${name}.md (${label})"
+  done
+}
+
+materialize_shared_rules() {
+  materialize_shared_dir ".claude/rules" "shared rule" "${SHARED_RULES[@]}"
+}
+
+materialize_shared_agents() {
+  materialize_shared_dir ".claude/agents" "shared agent" "${SHARED_AGENTS[@]}"
+}
+
+materialize_design_context() {
+  materialize_shared_dir ".design/context" "design context" "${SHARED_DESIGN_CONTEXT[@]}"
+}
+
+materialize_reference() {
+  materialize_shared_dir "reference" "reference doc" "${SHARED_REFERENCE[@]}"
 }
 
 verify_symlink() {
@@ -179,12 +242,43 @@ verify_ai_workflow_skills() {
   return "${missing}"
 }
 
+verify_shared_dir() {
+  local rel_dir="$1" label="$2"
+  shift 2
+  local names=("$@")
+  local missing=0 name
+
+  for name in "${names[@]}"; do
+    if [[ ! -r "${PROJECT_ROOT}/${rel_dir}/${name}.md" ]]; then
+      echo "ERROR: missing ${rel_dir}/${name}.md (${label})" >&2
+      missing=1
+    fi
+  done
+  return "${missing}"
+}
+
+verify_shared_rules_agents() {
+  local errors=0
+  verify_shared_dir ".claude/rules" "shared rule" "${SHARED_RULES[@]}" || errors=1
+  verify_shared_dir ".claude/agents" "shared agent" "${SHARED_AGENTS[@]}" || errors=1
+  return "${errors}"
+}
+
+verify_design_context() {
+  verify_shared_dir ".design/context" "design context" "${SHARED_DESIGN_CONTEXT[@]}"
+}
+
+verify_reference() {
+  verify_shared_dir "reference" "reference doc" "${SHARED_REFERENCE[@]}"
+}
+
 run_verify() {
   local errors=0
 
   echo "Verifying agent skill symlinks..."
   if [[ "${LINK_CLAUDE}" == true ]]; then
     verify_symlink "${PROJECT_ROOT}/.claude" "Claude" || errors=1
+    verify_shared_rules_agents || errors=1
   fi
   if [[ "${LINK_CURSOR}" == true ]]; then
     verify_symlink "${PROJECT_ROOT}/.cursor" "Cursor" || errors=1
@@ -196,6 +290,8 @@ run_verify() {
   echo "Verifying canonical skills/ content..."
   verify_osac_skills || errors=1
   verify_ai_workflow_skills || errors=1
+  verify_design_context || errors=1
+  verify_reference || errors=1
 
   if [[ "${LINK_CURSOR}" == true ]] && [[ ! -f "${PROJECT_ROOT}/.cursor/commands/implement-ingest.md" ]]; then
     echo "WARN: missing .cursor/commands/implement-ingest.md (run ai-workflows cursor install?)" >&2
@@ -251,11 +347,15 @@ if [[ "${VERIFY_ONLY}" == true ]]; then
 fi
 
 echo "Linking agent skill directories to skills/..."
+materialize_design_context
+materialize_reference
 if [[ "${LINK_AI_WORKFLOWS}" == true ]]; then
   link_canonical_ai_workflows
 fi
 if [[ "${LINK_CLAUDE}" == true ]]; then
   link_agent_skills "${PROJECT_ROOT}/.claude" "Claude"
+  materialize_shared_rules
+  materialize_shared_agents
 fi
 if [[ "${LINK_CURSOR}" == true ]]; then
   link_agent_skills "${PROJECT_ROOT}/.cursor" "Cursor"

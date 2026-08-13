@@ -36,6 +36,26 @@ PROJECT_ROOT=/path/to/consumer \
   /path/to/.osac-ai-skills/tools/link-agent-skills.sh --all --with-ai-workflows
 ```
 
+### Shared rules, agents, design context, and reference docs
+
+Beyond skill symlinks, the fan-out also materializes canonical content that
+lives directly at its real consumer-side path in this repo — `.claude/rules/`,
+`.claude/agents/`, `.design/context/`, and `reference/` — as per-file symlinks
+into `$PROJECT_ROOT`'s matching path, alongside any consumer-local files
+already there (e.g. a workspace-only rule with no reason to be shared):
+
+- `.claude/rules/*.md` and `.claude/agents/*.md` — materialized only when
+  `--claude` (or `--all`) is passed; no Cursor/Gemini equivalent format exists
+  to fan the same raw content out to.
+- `.design/context/*.md` and `reference/*.md` — materialized unconditionally.
+  Agent-agnostic: read directly by skill instructions (`design-review`,
+  `prd-review`, `flightctl/ai-workflows`'s `prd`/`design`), not by any one
+  coding agent's auto-attach mechanism.
+
+Content in these directories must stay agnostic to where a consumer clones
+sibling repos — use component-relative paths or full GitHub URLs, never a
+path that assumes a specific repo nesting depth.
+
 ## Shared helper scripts
 
 Some skills need small bash helpers beyond what's inlined in their `SKILL.md`.
