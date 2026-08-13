@@ -70,9 +70,9 @@ Confirm the dependencies list shows the correct component versions.
 
 ```bash
 cd "$OSAC_INSTALLER_PATH"
-git fetch $OSAC_REMOTE --tags
-git tag v<UMBRELLA_VERSION> $OSAC_REMOTE/main
-git push $OSAC_REMOTE v<UMBRELLA_VERSION>
+git fetch "${OSAC_REMOTES[osac-installer]}" --tags
+git tag v<UMBRELLA_VERSION> "${OSAC_REMOTES[osac-installer]}/main"
+git push "${OSAC_REMOTES[osac-installer]}" v<UMBRELLA_VERSION>
 ```
 
 This creates a version record since `workflow_dispatch` does not create a tag

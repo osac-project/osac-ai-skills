@@ -23,7 +23,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
 metadata:
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # /osac-release -- OSAC Helm Chart Release Wizard
@@ -94,9 +94,10 @@ Discovery steps:
 2. For each component, check `$(dirname $WORKSPACE_ROOT)/<repo-name>/`
 3. If not found, prompt user via AskUserQuestion for the repo path
 4. Detect the osac-project remote for each repo using
-   `tools/resolve-remotes.sh`. Store the result as `OSAC_REMOTE` per repo.
-   All git commands in subsequent steps use `$OSAC_REMOTE` instead of a
-   hardcoded remote name.
+   `tools/resolve-remotes.sh`. Store the result in `OSAC_REMOTES` keyed by
+   repo name. All git commands in subsequent steps use
+   `${OSAC_REMOTES[$repo]}` (or `${OSAC_REMOTES[osac-installer]}` for the
+   umbrella) instead of a hardcoded remote name.
 
 ## Workflow
 
@@ -115,7 +116,7 @@ Execute steps in order. Read the referenced file for each phase:
 | `gh` or `helm` not found | Error with install instructions |
 | Repo not found at expected path | Ask user for explicit path |
 | No osac-project remote | Error: no remote points to `osac-project/<repo>` (checked all remotes by URL) |
-| Uncommitted changes in repo | Warn (non-blocking) -- tags are on `$OSAC_REMOTE/main` |
+| Uncommitted changes in repo | Warn (non-blocking) -- tags are on `${OSAC_REMOTES[$repo]}/main` |
 | Tag already exists on same commit | Skip tagging, proceed to monitoring |
 | Tag already exists on different commit | Ask: (a) delete and re-tag, (b) skip, (c) abort |
 | Tag push fails after previous repos tagged | Ask: (a) rollback previous tags, (b) retry, (c) abort |
@@ -133,7 +134,7 @@ Execute steps in order. Read the referenced file for each phase:
 - bare-metal-fulfillment-operator also publishes TWO charts (operator +
   operator-crds) from a single tag push. Same verification pattern.
 - osac-ui publishes ONE chart (`osac-ui`) from a single tag push.
-- Always tag `$OSAC_REMOTE/main` to ensure the latest merged code is tagged.
+- Always tag `${OSAC_REMOTES[$repo]}/main` to ensure the latest merged code is tagged.
 - The umbrella chart uses `workflow_dispatch` (not tag push) to allow explicit
   version control over component dependencies.
 - Every component's tag push also triggers a separate image-build workflow

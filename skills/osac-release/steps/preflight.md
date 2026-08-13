@@ -145,13 +145,14 @@ for _cand in "${HOME}/.osac-ai-skills" "${WORKSPACE_ROOT}/.osac-ai-skills"; do
 done
 if [[ -z "$OSAC_AI_SKILLS_DIR" ]]; then
   echo "ERROR: resolve-remotes.sh not found in a vendored osac-ai-skills checkout (~/.osac-ai-skills or ${WORKSPACE_ROOT}/.osac-ai-skills). Run tools/bootstrap.sh, then retry." >&2
-  # Stop here rather than guessing 'origin' — OSAC_REMOTE below feeds
+  # Stop here rather than guessing 'origin' — OSAC_REMOTES below feeds
   # git push/tag for an official release; an unverified guess (origin
   # isn't guaranteed to be osac-project, not a personal fork) is worse
   # than refusing to proceed.
   exit 1
 fi
 
+declare -A OSAC_REMOTES
 for repo in <selected repos>; do
   path="${PARENT_DIR}/${repo}"
   if [ -d "$path" ]; then
@@ -164,15 +165,16 @@ for repo in <selected repos>; do
       continue
     }
     eval "$_resolve_out"
-    OSAC_REMOTE="$UPSTREAM_REMOTE"
+    OSAC_REMOTES[$repo]="$UPSTREAM_REMOTE"
   fi
 done
 ```
 
-Store `OSAC_REMOTE` per repo for use in all subsequent steps. All git commands
-that reference the osac-project remote (`git fetch`, `git push`, `git tag`,
-`git ls-remote`, `git rev-parse`) use `$OSAC_REMOTE` instead of a hardcoded
-remote name.
+Store remotes in `OSAC_REMOTES` keyed by repo name for use in all subsequent
+steps. All git commands that reference the osac-project remote (`git fetch`,
+`git push`, `git tag`, `git ls-remote`, `git rev-parse`) use
+`${OSAC_REMOTES[$repo]}` (or `${OSAC_REMOTES[osac-installer]}` for the
+umbrella) instead of a hardcoded remote name.
 
 If a selected repo is not found, tell the user:
 
@@ -194,5 +196,5 @@ if [ -n "$(git -C "$path" status --porcelain)" ]; then
 fi
 ```
 
-Warn the user but do not block. Tags are created on `$OSAC_REMOTE/main`, not
-the local working tree.
+Warn the user but do not block. Tags are created on `${OSAC_REMOTES[$repo]}/main`,
+not the local working tree.
