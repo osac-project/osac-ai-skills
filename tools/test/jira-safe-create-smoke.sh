@@ -42,11 +42,48 @@ test_unregistered_temp_leaks() {
 }
 
 test_double_source_idempotent() {
-  # shellcheck source=/dev/null
-  source "$SOURCE"
-  # shellcheck source=/dev/null
-  source "$SOURCE"
-  pass "double source is idempotent"
+  local dir marker path
+  dir=$(mktemp -d)
+  marker="${dir}/prior-trap"
+  path=$(
+    trap "touch '${marker}'" EXIT
+    # shellcheck source=/dev/null
+    source "$SOURCE"
+    local f
+    f=$(new_temp smoke-double)
+    add_temp "$f"
+    # JIRA_SAFE_CREATE_LOADED must no-op the second source — state preserved.
+    # shellcheck source=/dev/null
+    source "$SOURCE"
+    echo "$f"
+  )
+  [[ -n "$path" ]] || fail "new_temp returned empty path"
+  [[ ! -f "$path" ]] || fail "registered temp leaked after double source: $path"
+  [[ -f "$marker" ]] || fail "prior EXIT trap lost after double source"
+  rm -rf "$dir"
+  pass "double source preserves registered temps and prior EXIT trap"
+}
+
+# Prior EXIT trap must observe the status that triggered exit, not rm's status.
+test_prior_trap_sees_original_exit_status() {
+  local dir status_file got
+  dir=$(mktemp -d)
+  status_file="${dir}/status"
+  (
+    # Expand status_file at trap-set time; keep $? deferred until EXIT fires.
+    trap "printf '%s\n' \"\$?\" >\"${status_file}\"" EXIT
+    # shellcheck source=/dev/null
+    source "$SOURCE"
+    local f
+    f=$(new_temp smoke-status)
+    add_temp "$f"
+    exit 23
+  ) || true
+  [[ -f "$status_file" ]] || fail "prior EXIT trap did not write status file"
+  got=$(cat "$status_file")
+  [[ "$got" == "23" ]] || fail "prior EXIT trap saw \$?=$got, expected 23"
+  rm -rf "$dir"
+  pass "prior EXIT trap observes original exit status (23)"
 }
 
 # Caller EXIT trap registered before source must still run after temp cleanup.
@@ -109,5 +146,6 @@ test_preserves_preexisting_exit_trap
 test_later_registered_exit_trap_composed
 test_preserves_caller_temp_files_array
 test_double_source_idempotent
+test_prior_trap_sees_original_exit_status
 
 echo "All jira-safe-create smoke tests passed."

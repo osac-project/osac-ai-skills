@@ -23,7 +23,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
 metadata:
-  version: "0.1.2"
+  version: "0.1.3"
 ---
 
 # /osac-release -- OSAC Helm Chart Release Wizard
@@ -95,9 +95,11 @@ Discovery steps:
 3. If not found, prompt user via AskUserQuestion for the repo path
 4. Detect the osac-project remote for each repo using
    `tools/resolve-remotes.sh`. Store the result in `OSAC_REMOTES` keyed by
-   repo name. All git commands in subsequent steps use
-   `${OSAC_REMOTES[$repo]}` (or `${OSAC_REMOTES[osac-installer]}` for the
-   umbrella) instead of a hardcoded remote name.
+   checkout directory name. When the umbrella is selected (UI label
+   `osac (umbrella)`), also resolve `osac-installer` into that map. All git
+   commands in subsequent steps use `${OSAC_REMOTES[$repo]}` (or
+   `${OSAC_REMOTES[osac-installer]}` for the umbrella) instead of a hardcoded
+   remote name.
 
 ## Workflow
 

@@ -168,13 +168,34 @@ for repo in <selected repos>; do
     OSAC_REMOTES[$repo]="$UPSTREAM_REMOTE"
   fi
 done
+
+# UI label is "osac (umbrella)" but Step 8 keys on osac-installer. Whenever
+# the umbrella is selected, resolve that repo into OSAC_REMOTES even if the
+# selection list used the UI label rather than the checkout directory name.
+if <umbrella selected> && [[ -z "${OSAC_REMOTES[osac-installer]+x}" ]]; then
+  repo=osac-installer
+  path="${PARENT_DIR}/${repo}"
+  if [ -d "$path" ]; then
+    UPSTREAM_REMOTE=""
+    PUSH_REMOTE=""
+    _resolve_out=$("${OSAC_AI_SKILLS_DIR}/tools/resolve-remotes.sh" "$path") || {
+      echo "ERROR: osac-installer has no remote pointing to osac-project/osac-installer."
+      echo "  Add one (any name works): git -C \"$path\" remote add <name> https://github.com/osac-project/osac-installer.git"
+      # Stop or prompt user — umbrella Step 8 cannot proceed without this mapping
+    }
+    eval "$_resolve_out"
+    OSAC_REMOTES[osac-installer]="$UPSTREAM_REMOTE"
+  fi
+fi
 ```
 
-Store remotes in `OSAC_REMOTES` keyed by repo name for use in all subsequent
-steps. All git commands that reference the osac-project remote (`git fetch`,
-`git push`, `git tag`, `git ls-remote`, `git rev-parse`) use
-`${OSAC_REMOTES[$repo]}` (or `${OSAC_REMOTES[osac-installer]}` for the
-umbrella) instead of a hardcoded remote name.
+Store remotes in `OSAC_REMOTES` keyed by **checkout directory name** (e.g.
+`fulfillment-service`, `osac-installer`) for use in all subsequent steps.
+Map the UI label `osac (umbrella)` → key `osac-installer`. All git commands
+that reference the osac-project remote (`git fetch`, `git push`, `git tag`,
+`git ls-remote`, `git rev-parse`) use `${OSAC_REMOTES[$repo]}` (or
+`${OSAC_REMOTES[osac-installer]}` for the umbrella) instead of a hardcoded
+remote name.
 
 If a selected repo is not found, tell the user:
 

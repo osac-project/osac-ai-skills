@@ -89,7 +89,14 @@ bare-metal-fulfillment-operator, osac-ui):
 
 1. Check if tag already exists and compare SHAs:
    ```bash
-   TAG_SHA=$(git ls-remote "${OSAC_REMOTES[$repo]}" --tags "v<VERSION>" | awk '{print $1}')
+   # Prefer the peeled ^{} commit for annotated tags; fall back to the
+   # lightweight tag object SHA when no peeled entry exists.
+   TAG_SHA=$(git ls-remote "${OSAC_REMOTES[$repo]}" --tags "v<VERSION>" \
+     | awk '
+         $2 ~ /\^\{\}$/ { print $1; peeled=1; exit }
+         { tag=$1 }
+         END { if (!peeled && tag != "") print tag }
+       ')
    MAIN_SHA=$(git rev-parse "${OSAC_REMOTES[$repo]}/main")
    ```
 2. If `TAG_SHA` is empty, tag does not exist -- proceed to step 5.

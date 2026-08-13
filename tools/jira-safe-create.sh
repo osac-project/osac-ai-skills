@@ -36,10 +36,15 @@ _jsc_capture_prev_exit() {
 }
 
 _jsc_cleanup() {
+  local _jsc_status=$?
+  # EXIT traps run under the caller's set -e; a non-zero status-restoring
+  # subshell must not abort before the prior trap runs.
+  set +e
   if ((${#_JSC_TEMP_FILES[@]} > 0)); then
     rm -f "${_JSC_TEMP_FILES[@]}"
   fi
   if [[ -n "${_JSC_PREV_EXIT_TRAP}" ]]; then
+    (exit "$_jsc_status")
     eval "${_JSC_PREV_EXIT_TRAP}"
   fi
 }
