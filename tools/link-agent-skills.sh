@@ -13,17 +13,19 @@
 # workflows still bootstrap ai-workflows themselves (e.g. osac/tools/bootstrap.sh).
 #
 # Also materializes shared content from this repo's own .claude/rules/,
-# .claude/agents/, .design/context/, and reference/ into the consumer's tree
-# (per-file symlinks, alongside any consumer-local files in the same dirs):
+# .claude/agents/, and .design/context/ into the consumer's tree (per-file
+# symlinks, alongside any consumer-local files in the same dirs):
 #   .claude/rules/<name>.md   -> <this repo>/.claude/rules/<name>.md
 #   .claude/agents/<name>.md  -> <this repo>/.claude/agents/<name>.md
 #   .design/context/<name>.md -> <this repo>/.design/context/<name>.md
-#   reference/<name>.md       -> <this repo>/reference/<name>.md
 # Rules/agents are Claude-only today (no Cursor/Gemini equivalent format to
-# fan the same raw content out to). design/context and reference are
-# agent-agnostic — they're read by skill instructions (prd-review,
-# design-review, ai-workflows prd/design), not by any one coding agent's
-# auto-attach mechanism.
+# fan the same raw content out to). design/context is agent-agnostic — it's
+# read by skill instructions (prd-review, design-review, ai-workflows
+# prd/design), not by any one coding agent's auto-attach mechanism.
+# reference/*.md (ARCHITECTURE.md and siblings) is NOT centralized here —
+# it's a codebase-analysis snapshot of osac/'s own internals (same origin as
+# reference/CONVENTIONS.md and friends, which stay consumer-local), not
+# portable guidance. Placement is deferred to OSAC-4008.
 # OSAC-4006: centralized here (not duplicated per-consumer) so both osac and
 # osac-workspace pick this up automatically once they vendor+exec this script.
 set -euo pipefail
@@ -66,7 +68,6 @@ AI_WORKFLOW_SKILLS=(bugfix design e2e implement prd)
 SHARED_RULES=(architecture-patterns networking-design-alignment request-path-tracing)
 SHARED_AGENTS=(quick-fix)
 SHARED_DESIGN_CONTEXT=(enclave-wizard-pipeline networking-decisions osac-dimensions review-patterns)
-SHARED_REFERENCE=(ARCHITECTURE)
 
 LINK_CLAUDE=false
 LINK_CURSOR=false
@@ -86,9 +87,8 @@ Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--all] [--with-ai-work
                         consumers that bootstrap ai-workflows pass this)
   --verify              Verify symlinks and OSAC skill files; exit non-zero on failure
 
-Always materializes .design/context/*.md and reference/*.md (agent-agnostic;
-read by skill instructions, not by any one coding agent's auto-attach
-mechanism).
+Always materializes .design/context/*.md (agent-agnostic; read by skill
+instructions, not by any one coding agent's auto-attach mechanism).
 When --claude (or --all) is passed, also materializes shared rules
 (.claude/rules/*.md) and agents (.claude/agents/*.md).
 EOF
@@ -184,10 +184,6 @@ materialize_shared_agents() {
 
 materialize_design_context() {
   materialize_shared_dir ".design/context" "design context" "${SHARED_DESIGN_CONTEXT[@]}"
-}
-
-materialize_reference() {
-  materialize_shared_dir "reference" "reference doc" "${SHARED_REFERENCE[@]}"
 }
 
 verify_symlink() {
@@ -292,10 +288,6 @@ verify_design_context() {
   verify_shared_dir ".design/context" "design context" "${SHARED_DESIGN_CONTEXT[@]}"
 }
 
-verify_reference() {
-  verify_shared_dir "reference" "reference doc" "${SHARED_REFERENCE[@]}"
-}
-
 run_verify() {
   local errors=0
 
@@ -315,7 +307,6 @@ run_verify() {
   verify_osac_skills || errors=1
   verify_ai_workflow_skills || errors=1
   verify_design_context || errors=1
-  verify_reference || errors=1
 
   if [[ "${LINK_CURSOR}" == true ]] && [[ ! -f "${PROJECT_ROOT}/.cursor/commands/implement-ingest.md" ]]; then
     echo "WARN: missing .cursor/commands/implement-ingest.md (run ai-workflows cursor install?)" >&2
@@ -372,7 +363,6 @@ fi
 
 echo "Linking agent skill directories to skills/..."
 materialize_design_context
-materialize_reference
 if [[ "${LINK_AI_WORKFLOWS}" == true ]]; then
   link_canonical_ai_workflows
 fi
