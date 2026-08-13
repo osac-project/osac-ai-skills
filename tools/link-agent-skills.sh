@@ -247,7 +247,7 @@ verify_shared_dir() {
   local rel_dir="$1" label="$2"
   shift 2
   local names=("$@")
-  local missing=0 name path expected resolved
+  local missing=0 name path expected resolved expected_resolved
 
   for name in "${names[@]}"; do
     path="${PROJECT_ROOT}/${rel_dir}/${name}.md"
@@ -263,13 +263,19 @@ verify_shared_dir() {
     # — a stale real file left over from before materialization would pass a
     # bare readability check without actually tracking the canonical source.
     expected="${REPO_ROOT}/${rel_dir}/${name}.md"
+    if [[ ! -f "${expected}" ]] || [[ ! -r "${expected}" ]]; then
+      echo "ERROR: canonical source ${expected} missing or unreadable (${label})" >&2
+      missing=1
+      continue
+    fi
     if [[ ! -L "${path}" ]]; then
       echo "ERROR: ${rel_dir}/${name}.md (${label}) is not a symlink" >&2
       missing=1
       continue
     fi
     resolved="$(realpath "${path}" 2>/dev/null || true)"
-    if [[ "${resolved}" != "$(realpath "${expected}")" ]]; then
+    expected_resolved="$(realpath "${expected}" 2>/dev/null || true)"
+    if [[ -z "${resolved}" ]] || [[ -z "${expected_resolved}" ]] || [[ "${resolved}" != "${expected_resolved}" ]]; then
       echo "ERROR: ${rel_dir}/${name}.md (${label}) resolves to ${resolved:-<broken symlink>}, expected ${expected}" >&2
       missing=1
     fi

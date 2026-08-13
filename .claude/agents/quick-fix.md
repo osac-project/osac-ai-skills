@@ -236,13 +236,13 @@ Status: Code Review
 Tests:  <N> passing
 ```
 
-On partial failure (PR creation or the Jira transition failed), report what actually happened instead of claiming completion:
+On partial failure (PR creation or the Jira transition failed), query the issue's current status (`jira issue view <KEY> --plain`) before reporting — do not assume it stayed unmoved. Report the queried status, or `unknown` if that query also fails:
 
 ```text
 Bug fix incomplete:
 
 Jira:   https://redhat.atlassian.net/browse/<KEY>
 PR:     <full PR URL, or "failed to create — see error above">
-Status: <actual current Jira status — did NOT move to Code Review>
+Status: <queried current Jira status, or "unknown" if the status query failed>
 Tests:  <N> passing
 ```
