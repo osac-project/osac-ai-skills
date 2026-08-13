@@ -182,9 +182,12 @@ if <umbrella selected> && [[ -z "${OSAC_REMOTES[osac-installer]+x}" ]]; then
       echo "ERROR: osac-installer has no remote pointing to osac-project/osac-installer."
       echo "  Add one (any name works): git -C \"$path\" remote add <name> https://github.com/osac-project/osac-installer.git"
       # Stop or prompt user — umbrella Step 8 cannot proceed without this mapping
+      _resolve_out=""
     }
-    eval "$_resolve_out"
-    OSAC_REMOTES[osac-installer]="$UPSTREAM_REMOTE"
+    if [[ -n "$_resolve_out" ]]; then
+      eval "$_resolve_out"
+      OSAC_REMOTES[osac-installer]="$UPSTREAM_REMOTE"
+    fi
   fi
 fi
 ```
