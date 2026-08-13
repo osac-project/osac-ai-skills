@@ -20,15 +20,48 @@ if [[ -n "${JIRA_SAFE_CREATE_LOADED:-}" ]]; then
 fi
 JIRA_SAFE_CREATE_LOADED=1
 
-TEMP_FILES=()
-cleanup() {
-  if ((${#TEMP_FILES[@]} > 0)); then
-    rm -f "${TEMP_FILES[@]}"
+_JSC_TEMP_FILES=()
+_JSC_PREV_EXIT_TRAP=""
+
+# Unescape the command body from `trap -p EXIT` (trap -- 'body' EXIT / "body").
+_jsc_capture_prev_exit() {
+  _JSC_PREV_EXIT_TRAP=""
+  local tp
+  tp=$(trap -p EXIT 2>/dev/null || true)
+  [[ -z "$tp" ]] && return 0
+  tp=${tp#trap -- }
+  tp=${tp% EXIT}
+  # shellcheck disable=SC2086 # intentional: tp is a shell-quoted string from trap -p
+  _JSC_PREV_EXIT_TRAP=$(eval "printf '%s\n' $tp")
+}
+
+_jsc_cleanup() {
+  if ((${#_JSC_TEMP_FILES[@]} > 0)); then
+    rm -f "${_JSC_TEMP_FILES[@]}"
+  fi
+  if [[ -n "${_JSC_PREV_EXIT_TRAP}" ]]; then
+    eval "${_JSC_PREV_EXIT_TRAP}"
   fi
 }
-trap cleanup EXIT
 
-add_temp() { TEMP_FILES+=("$1"); }
+# Install our EXIT wrapper. Re-wrap when a later trap replaced us (call from add_temp).
+_jsc_install_exit_trap() {
+  local tp
+  tp=$(trap -p EXIT 2>/dev/null || true)
+  if [[ "$tp" == *"_jsc_cleanup"* ]]; then
+    return 0
+  fi
+  _jsc_capture_prev_exit
+  trap '_jsc_cleanup' EXIT
+}
+
+_jsc_install_exit_trap
+
+add_temp() {
+  _JSC_TEMP_FILES+=("$1")
+  # Callers who set EXIT after sourcing replace our trap; re-chain on register.
+  _jsc_install_exit_trap
+}
 
 new_temp() {
   local prefix=${1:-osac-jira}
