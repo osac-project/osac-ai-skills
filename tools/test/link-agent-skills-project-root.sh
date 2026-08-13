@@ -18,8 +18,14 @@ trap 'rm -rf "$TMPDIR_ROOT"' EXIT
 
 # Build an isolated standalone checkout under TMPDIR_ROOT so default-mode
 # linking never touches the developer's real .claude/.
+# Also mirrors real osac-ai-skills content the script materializes/verifies
+# unconditionally (or under --claude) even in standalone mode: .claude/rules/,
+# .claude/agents/, .design/context/, and reference/ (OSAC-4006). In standalone
+# mode PROJECT_ROOT==REPO_ROOT, so materialize_shared_dir's self-symlink guard
+# no-ops — these must already exist as real files, not symlinks, same as a
+# real standalone clone would have.
 make_standalone_fixture() {
-  local isolated skill_dir name
+  local isolated skill_dir name rel_dir
   isolated=$(mktemp -d "${TMPDIR_ROOT}/standalone.XXXXXX")
   mkdir -p "${isolated}/tools" "${isolated}/skills"
   cp "$SCRIPT" "${isolated}/tools/link-agent-skills.sh"
@@ -28,6 +34,10 @@ make_standalone_fixture() {
     [[ -d "$skill_dir" ]] || continue
     name=$(basename "$skill_dir")
     ln -sfn "${skill_dir%/}" "${isolated}/skills/${name}"
+  done
+  for rel_dir in .claude/rules .claude/agents .design/context reference; do
+    mkdir -p "${isolated}/${rel_dir}"
+    cp "${REPO_ROOT}/${rel_dir}"/*.md "${isolated}/${rel_dir}/"
   done
   printf '%s' "$isolated"
 }
