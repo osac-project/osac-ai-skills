@@ -201,6 +201,49 @@ test_explicit_push_remote_invalid() {
   pass "--push-remote exits 2 for nonexistent remote"
 }
 
+# Triangular clone: single remote fetches upstream, pushes to a fork via pushurl.
+test_triangular_clone_pushurl() {
+  local repo
+  repo=$(make_repo "triangular")
+  git -C "$repo" remote add origin "https://github.com/osac-project/triangular.git"
+  git -C "$repo" remote set-url --push origin "git@github.com:dev/triangular.git"
+  local out
+  out=$("$SCRIPT" "$repo")
+  echo "$out" | grep -q "UPSTREAM_REMOTE=origin" || fail "triangular: expected UPSTREAM_REMOTE=origin, got: $out"
+  echo "$out" | grep -q "PUSH_REMOTE=origin" || fail "triangular: expected PUSH_REMOTE=origin (same remote via pushurl), got: $out"
+  pass "triangular clone (fetch upstream, pushurl fork → PUSH_REMOTE=origin)"
+}
+
+# Remote whose effective push URL is upstream must not be a push candidate.
+test_pushurl_to_upstream_excluded() {
+  local repo
+  repo=$(make_repo "pushurl-upstream")
+  git -C "$repo" remote add origin "https://github.com/osac-project/pushurl-upstream.git"
+  git -C "$repo" remote add colleague "git@github.com:colleague/pushurl-upstream.git"
+  git -C "$repo" remote set-url --push colleague "https://github.com/osac-project/pushurl-upstream.git"
+  git -C "$repo" remote add fork "git@github.com:dev/pushurl-upstream.git"
+  local out
+  out=$("$SCRIPT" "$repo" 2>/dev/null)
+  echo "$out" | grep -q "UPSTREAM_REMOTE=origin" || fail "expected UPSTREAM_REMOTE=origin, got: $out"
+  echo "$out" | grep -q "PUSH_REMOTE=fork" || fail "expected PUSH_REMOTE=fork (colleague pushurl is upstream), got: $out"
+  pass "pushurl-to-upstream remote excluded from push candidates"
+}
+
+test_triangular_clone_print_shows_push_url() {
+  local repo
+  repo=$(make_repo "triangular-print")
+  git -C "$repo" remote add origin "https://github.com/osac-project/triangular-print.git"
+  git -C "$repo" remote set-url --push origin "git@github.com:dev/triangular-print.git"
+  local out
+  out=$("$SCRIPT" --print "$repo")
+  echo "$out" | grep -q "Push remote:.*origin" || fail "print: expected Push remote: origin, got: $out"
+  echo "$out" | grep -q "git@github.com:dev/triangular-print.git" \
+    || fail "print: expected fork push URL in Push remote line, got: $out"
+  echo "$out" | grep -q "Upstream remote:.*osac-project/triangular-print" \
+    || fail "print: expected upstream fetch URL on Upstream remote line, got: $out"
+  pass "triangular --print shows push URL for Push remote"
+}
+
 test_standard_bootstrap_naming
 test_reversed_naming
 test_no_upstream
@@ -216,6 +259,9 @@ test_prefer_fork_remote
 test_explicit_push_remote
 test_explicit_push_remote_print
 test_explicit_push_remote_invalid
+test_triangular_clone_pushurl
+test_pushurl_to_upstream_excluded
+test_triangular_clone_print_shows_push_url
 
 echo ""
 echo "All resolve-remotes.sh smoke tests passed."

@@ -67,12 +67,15 @@ PUSH_REMOTE=""
 push_candidates=()
 
 while IFS= read -r remote; do
-  url=$(git -C "$REPO_PATH" remote get-url "$remote" 2>/dev/null || true)
-  if echo "$url" | grep -qE "[:/]${ORG_ESC}/[^/]+(\.git)?$"; then
+  fetch_url=$(git -C "$REPO_PATH" remote get-url "$remote" 2>/dev/null || true)
+  push_url=$(git -C "$REPO_PATH" remote get-url --push "$remote" 2>/dev/null || true)
+  if echo "$fetch_url" | grep -qE "[:/]${ORG_ESC}/[^/]+(\.git)?$"; then
     if [[ -z "$UPSTREAM_REMOTE" ]]; then
       UPSTREAM_REMOTE="$remote"
     fi
-  else
+  fi
+  # Effective push URL (may differ via pushurl) decides push candidacy independently.
+  if [[ -n "$push_url" ]] && ! echo "$push_url" | grep -qE "[:/]${ORG_ESC}/[^/]+(\.git)?$"; then
     push_candidates+=("$remote")
   fi
 done < <(git -C "$REPO_PATH" remote)
@@ -121,7 +124,7 @@ if [[ "$PRINT" == true ]]; then
   echo "Repository:      ${REPO_NAME}"
   echo "Upstream remote:  ${UPSTREAM_REMOTE} ($(git -C "$REPO_PATH" remote get-url "$UPSTREAM_REMOTE" | redact_url))"
   if [[ -n "$PUSH_REMOTE" ]]; then
-    echo "Push remote:      ${PUSH_REMOTE} ($(git -C "$REPO_PATH" remote get-url "$PUSH_REMOTE" | redact_url))"
+    echo "Push remote:      ${PUSH_REMOTE} ($(git -C "$REPO_PATH" remote get-url --push "$PUSH_REMOTE" | redact_url))"
   else
     echo "Push remote:      (none — read-only clone)"
   fi
