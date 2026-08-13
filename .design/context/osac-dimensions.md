@@ -184,4 +184,4 @@ When writing a PRD or design, explicitly declare:
 - **Target milestone** (e.g., 0.1, 0.2)
 - **What's NOT covered** — dimensions or capabilities deferred to a later milestone (e.g., "No Networking API integration in 0.1", "No Storage API in 0.1")
 - **Known risks and gaps** — dependencies, DNS requirements, third-party onboarding, etc.
-- **Upgrades** — OSAC does not currently support upgrades, so data migration and backward compatibility are not concerns at this stage. State this explicitly if applicable.
+- **Upgrades** — OSAC does not currently support in-place upgrades. State this limitation, but assess data migration and backward compatibility whenever existing state or independently deployed components are affected.

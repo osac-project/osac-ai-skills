@@ -3,7 +3,10 @@
 Extracted from the merged unified networking designs.
 Read this file during planning, implementation, and review of OSAC networking-related work.
 For full designs, see `enhancement-proposals/enhancements/` — search for networking-related
-directories (OSAC-1433, OSAC-1435, OSAC-1436, OSAC-1437, dns-api). Before finalizing PRD or
+directories (OSAC-1433, OSAC-1435, OSAC-1436, OSAC-1437, dns-api). This path assumes a sibling
+`enhancement-proposals/` checkout (true for `/design`/`/prd`, which only run from
+`osac-workspace/` root); otherwise, treat the cited IDs as search terms in the
+[`osac-project/enhancement-proposals`](https://github.com/osac-project/enhancement-proposals) repo. Before finalizing PRD or
 design scope for a feature that adds IP, MAC, or network-attachment data to any resource, check
 whether one of these already-accepted designs commits to delivering that same field — the
 decisions below establish the general mechanism (e.g., DHCP-based IP assignment via decision 10),

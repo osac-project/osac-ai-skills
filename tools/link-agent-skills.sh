@@ -157,14 +157,19 @@ materialize_shared_dir() {
   local rel_dir="$1" label="$2"
   shift 2
   local names=("$@")
-  local name
+  local name source
 
   if [[ "${PROJECT_ROOT}" == "${REPO_ROOT}" ]]; then
     return 0
   fi
   mkdir -p "${PROJECT_ROOT}/${rel_dir}"
   for name in "${names[@]}"; do
-    safe_symlink "${PROJECT_ROOT}/${rel_dir}/${name}.md" "${REPO_ROOT}/${rel_dir}/${name}.md"
+    source="${REPO_ROOT}/${rel_dir}/${name}.md"
+    if [[ ! -f "${source}" ]] || [[ ! -r "${source}" ]]; then
+      echo "ERROR: canonical source ${source} missing or unreadable (${label}); refusing to link" >&2
+      return 1
+    fi
+    safe_symlink "${PROJECT_ROOT}/${rel_dir}/${name}.md" "${source}"
     echo "  Linked ${rel_dir}/${name}.md -> osac-ai-skills/${rel_dir}/${name}.md (${label})"
   done
 }
@@ -246,11 +251,30 @@ verify_shared_dir() {
   local rel_dir="$1" label="$2"
   shift 2
   local names=("$@")
-  local missing=0 name
+  local missing=0 name path expected resolved
 
   for name in "${names[@]}"; do
-    if [[ ! -r "${PROJECT_ROOT}/${rel_dir}/${name}.md" ]]; then
-      echo "ERROR: missing ${rel_dir}/${name}.md (${label})" >&2
+    path="${PROJECT_ROOT}/${rel_dir}/${name}.md"
+    if [[ "${PROJECT_ROOT}" == "${REPO_ROOT}" ]]; then
+      # Standalone mode: this file *is* the canonical source, not a link to it.
+      if [[ ! -r "${path}" ]]; then
+        echo "ERROR: missing ${rel_dir}/${name}.md (${label})" >&2
+        missing=1
+      fi
+      continue
+    fi
+    # Consumer mode: must be a symlink resolving to this repo's canonical file
+    # — a stale real file left over from before materialization would pass a
+    # bare readability check without actually tracking the canonical source.
+    expected="${REPO_ROOT}/${rel_dir}/${name}.md"
+    if [[ ! -L "${path}" ]]; then
+      echo "ERROR: ${rel_dir}/${name}.md (${label}) is not a symlink" >&2
+      missing=1
+      continue
+    fi
+    resolved="$(realpath "${path}" 2>/dev/null || true)"
+    if [[ "${resolved}" != "$(realpath "${expected}")" ]]; then
+      echo "ERROR: ${rel_dir}/${name}.md (${label}) resolves to ${resolved:-<broken symlink>}, expected ${expected}" >&2
       missing=1
     fi
   done

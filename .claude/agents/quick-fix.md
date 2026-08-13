@@ -10,10 +10,33 @@ You will receive the bug context (description, root cause, affected repo, epic k
 
 ## Step 1: Open Jira Bug
 
+Use the safe-create pattern from `tools/jira-safe-create.sh` (resolve it from
+the vendored `osac-ai-skills` checkout, same as Step 7's remote resolution) —
+write the body to a temp file with a **quoted** heredoc so bug-context text
+can never be interpreted as shell syntax, and run `create` outside any
+`$(...)` so a failure doesn't silently produce an empty `KEY`:
+
 ```bash
-KEY=$(jira issue create -t Bug --project OSAC \
-  --summary "<concise bug title>" \
-  --body "**Description of the problem:**
+REPO_DIR=$(git rev-parse --show-toplevel)
+_jsc=""
+for _cand in "${HOME}/.osac-ai-skills" "${REPO_DIR}/.osac-ai-skills"; do
+  [[ -f "${_cand}/tools/jira-safe-create.sh" ]] && { _jsc="${_cand}/tools/jira-safe-create.sh"; break; }
+done
+if [[ -z "$_jsc" ]]; then
+  echo "jira-safe-create.sh not found in a vendored osac-ai-skills checkout. Run tools/bootstrap.sh, then retry." >&2
+  exit 1
+fi
+source "$_jsc"
+
+BODY=$(new_temp osac-bug-body)
+add_temp "$BODY"
+OUT=$(new_temp osac-jira-out)
+add_temp "$OUT"
+ERR=$(new_temp osac-jira-err)
+add_temp "$ERR"
+
+cat >"$BODY" <<'EOF'
+**Description of the problem:**
 
 <what is broken>
 
@@ -31,11 +54,23 @@ KEY=$(jira issue create -t Bug --project OSAC \
 
 **Actual result:**
 
-<what actually happens>" \
-  --no-input --raw 2>/dev/null | jq -r '.key')
+<what actually happens>
+EOF
+
+jira issue create -t Bug --project OSAC \
+  --summary "<concise bug title>" \
+  --template "$BODY" \
+  --no-input --raw >"$OUT" 2>"$ERR" </dev/null
+
+KEY=$(jq -r '.key // empty' "$OUT")
+if [ -z "$KEY" ]; then
+  cat "$ERR" >&2
+  echo "Jira issue create failed — stopping before epic linking, assignment, or fix work." >&2
+  exit 1
+fi
 ```
 
-**Key extraction:** `--raw` outputs JSON to stdout — always extract the key with `jq -r '.key'`, not `grep -oP`. `grep -oP` fails silently here because the text-mode output it would otherwise match goes to stderr, not stdout.
+**Key extraction:** `--raw` outputs JSON to stdout — always extract the key with `jq -r '.key // empty'` from the captured `$OUT`, not from a command substitution around `jira issue create` and not with `grep -oP` (fails silently since the text-mode output it would otherwise match goes to stderr, not stdout).
 
 Then link to epic, assign, and move to In Progress:
 
@@ -148,7 +183,10 @@ for _d in "$HOME/.osac-ai-skills" "./.osac-ai-skills"; do [[ -x "$_d/tools/resol
 ```bash
 git push -u "$PUSH_REMOTE" <branch-name>
 
-gh pr create \
+PR_OUT=$(new_temp osac-pr-out)
+add_temp "$PR_OUT"
+
+if gh pr create \
   --repo osac-project/<repo-name> \
   --title "<KEY>: <short description>" \
   --body "$(cat <<'EOF'
@@ -167,8 +205,15 @@ Fixes: https://redhat.atlassian.net/browse/<KEY>
 
 Assisted-by: <AI tool> <contact>
 EOF
-)"
+)" >"$PR_OUT" 2>&1; then
+  PR_URL=$(tail -n1 "$PR_OUT")
+else
+  cat "$PR_OUT" >&2
+  PR_URL=""
+fi
 ```
+
+**Only proceed to Step 8 if `$PR_URL` is non-empty.** If PR creation failed, stop here, leave the Jira ticket in its current state, and report the failure per Step 9's partial-failure format instead.
 
 ## Step 8: Move Ticket to Code Review
 
@@ -176,15 +221,28 @@ EOF
 jira issue move <KEY> "Code Review"
 ```
 
+Only run this — and only report `Status: Code Review` in Step 9 — after confirming both the PR was created (`$PR_URL` non-empty) and this move command exits successfully. If either fails, leave the ticket where it is and report the partial failure instead.
+
 ## Step 9: Report
 
-Your final output MUST be a structured summary:
+Your final output MUST be a structured summary. On full success:
 
-```
+```text
 Bug fix complete:
 
 Jira:   https://redhat.atlassian.net/browse/<KEY>
 PR:     <full PR URL>
 Status: Code Review
+Tests:  <N> passing
+```
+
+On partial failure (PR creation or the Jira transition failed), report what actually happened instead of claiming completion:
+
+```text
+Bug fix incomplete:
+
+Jira:   https://redhat.atlassian.net/browse/<KEY>
+PR:     <full PR URL, or "failed to create — see error above">
+Status: <actual current Jira status — did NOT move to Code Review>
 Tests:  <N> passing
 ```

@@ -120,7 +120,8 @@
 
 **State Management:**
 
-- Desired state: Stored in resource Spec (creation_timestamp, deletion_timestamp, labels, annotations)
+- Resource metadata: Stored in metadata (creation_timestamp, deletion_timestamp, labels, annotations)
+- Desired state: Stored in resource Spec (user-controlled desired fields)
 - Observed state: Stored in resource Status (conditions, phase, last-observed-generation)
 - Controller duty: Reconcile observed state toward desired state
 - Database as source of truth: Controllers read from DB via gRPC, write back via Signal RPC
