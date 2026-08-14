@@ -13,15 +13,20 @@
 # workflows still bootstrap ai-workflows themselves (e.g. osac/tools/bootstrap.sh).
 #
 # Also materializes shared content from this repo's own .claude/rules/,
-# .claude/agents/, and .design/context/ into the consumer's tree (per-file
-# symlinks, alongside any consumer-local files in the same dirs):
+# .claude/agents/, .claude/hooks/, and .design/context/ into the consumer's
+# tree (per-file symlinks, alongside any consumer-local files in the same
+# dirs):
 #   .claude/rules/<name>.md   -> <this repo>/.claude/rules/<name>.md
 #   .claude/agents/<name>.md  -> <this repo>/.claude/agents/<name>.md
+#   .claude/hooks/<name>.md   -> <this repo>/.claude/hooks/<name>.md
 #   .design/context/<name>.md -> <this repo>/.design/context/<name>.md
-# Rules/agents are Claude-only today (no Cursor/Gemini equivalent format to
-# fan the same raw content out to). design/context is agent-agnostic — it's
-# read by skill instructions (prd-review, design-review, ai-workflows
-# prd/design), not by any one coding agent's auto-attach mechanism.
+# Rules/agents/hooks docs are Claude-only today (no Cursor/Gemini equivalent
+# format to fan the same raw content out to). design/context is
+# agent-agnostic — it's read by skill instructions (prd-review, design-review,
+# ai-workflows prd/design), not by any one coding agent's auto-attach
+# mechanism. Only hook *documentation* (e.g. README.md) is shared this way —
+# the hook scripts themselves (statusline.sh, etc.) are consumer-specific
+# executables, not portable content.
 # reference/*.md (ARCHITECTURE.md and siblings) is NOT centralized here —
 # it's a codebase-analysis snapshot of osac/'s own internals (same origin as
 # reference/CONVENTIONS.md and friends, which stay consumer-local), not
@@ -65,8 +70,9 @@ OSAC_SKILLS=(
 
 AI_WORKFLOW_SKILLS=(bugfix design e2e implement prd)
 
-SHARED_RULES=(architecture-patterns networking-design-alignment request-path-tracing)
+SHARED_RULES=(architecture-patterns networking-design-alignment request-path-tracing dev-conventions)
 SHARED_AGENTS=(quick-fix)
+SHARED_HOOKS=(README)
 SHARED_DESIGN_CONTEXT=(enclave-wizard-pipeline networking-decisions osac-dimensions review-patterns)
 
 LINK_CLAUDE=false
@@ -90,7 +96,8 @@ Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--all] [--with-ai-work
 Always materializes .design/context/*.md (agent-agnostic; read by skill
 instructions, not by any one coding agent's auto-attach mechanism).
 When --claude (or --all) is passed, also materializes shared rules
-(.claude/rules/*.md) and agents (.claude/agents/*.md).
+(.claude/rules/*.md), agents (.claude/agents/*.md), and hook docs
+(.claude/hooks/*.md).
 EOF
 }
 
@@ -180,6 +187,10 @@ materialize_shared_rules() {
 
 materialize_shared_agents() {
   materialize_shared_dir ".claude/agents" "shared agent" "${SHARED_AGENTS[@]}"
+}
+
+materialize_shared_hooks() {
+  materialize_shared_dir ".claude/hooks" "shared hook doc" "${SHARED_HOOKS[@]}"
 }
 
 materialize_design_context() {
@@ -287,6 +298,7 @@ verify_shared_rules_agents() {
   local errors=0
   verify_shared_dir ".claude/rules" "shared rule" "${SHARED_RULES[@]}" || errors=1
   verify_shared_dir ".claude/agents" "shared agent" "${SHARED_AGENTS[@]}" || errors=1
+  verify_shared_dir ".claude/hooks" "shared hook doc" "${SHARED_HOOKS[@]}" || errors=1
   return "${errors}"
 }
 
@@ -376,6 +388,7 @@ if [[ "${LINK_CLAUDE}" == true ]]; then
   link_agent_skills "${PROJECT_ROOT}/.claude" "Claude"
   materialize_shared_rules
   materialize_shared_agents
+  materialize_shared_hooks
 fi
 if [[ "${LINK_CURSOR}" == true ]]; then
   link_agent_skills "${PROJECT_ROOT}/.cursor" "Cursor"
