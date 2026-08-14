@@ -1,3 +1,4 @@
 # Hooks
 
-This directory contains hook scripts for Claude Code workflows.
+This directory contains shared hook documentation for Claude Code workflows.
+Hook scripts are consumer-specific executables and are not materialized here.
