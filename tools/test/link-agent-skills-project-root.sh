@@ -115,6 +115,15 @@ test_project_root_override_links_consumer() {
   [[ -L "${consumer}/skills/bugfix" ]] || fail "expected skills/bugfix symlink under consumer"
   [[ -r "${consumer}/skills/bugfix/SKILL.md" ]] || fail "cannot read bugfix via consumer skills/"
 
+  [[ -L "${consumer}/.design/templates/section-guidance.md" ]] \
+    || fail "expected .design/templates/section-guidance.md to be a symlink under consumer"
+  [[ -r "${consumer}/.design/templates/section-guidance.md" ]] \
+    || fail "cannot read .design/templates/section-guidance.md via consumer symlink"
+  [[ -L "${consumer}/.prd/templates/section-guidance.md" ]] \
+    || fail "expected .prd/templates/section-guidance.md to be a symlink under consumer"
+  [[ -r "${consumer}/.prd/templates/section-guidance.md" ]] \
+    || fail "cannot read .prd/templates/section-guidance.md via consumer symlink"
+
   if [[ "${had_repo_claude}" -eq 0 ]]; then
     [[ ! -e "${REPO_ROOT}/.claude/skills" ]] \
       || fail "consumer mode created ${REPO_ROOT}/.claude/skills (expected isolation)"
@@ -148,12 +157,12 @@ test_safe_symlink_refuses_differing_real_file() {
   # A consumer's real file that differs from canonical content must still
   # hard-fail -- this is the actual-conflict case, not a rollout-ordering
   # artifact, and silently overwriting it would be data loss.
-  local consumer out
+  local consumer out expected_content
   consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-differing.XXXXXX")
   link_native_skills_into "$consumer"
   mkdir -p "${consumer}/.design/templates"
-  echo "# locally-diverged content, not the canonical file" \
-    >"${consumer}/.design/templates/section-guidance.md"
+  expected_content="# locally-diverged content, not the canonical file"
+  echo "$expected_content" >"${consumer}/.design/templates/section-guidance.md"
 
   if out=$(PROJECT_ROOT="$consumer" "$SCRIPT" --claude 2>&1); then
     fail "script should fail when pre-existing real file differs from canonical (got: $out)"
@@ -162,6 +171,8 @@ test_safe_symlink_refuses_differing_real_file() {
     || fail "expected a refusing-to-replace ERROR for the differing pre-existing real file"
   [[ ! -L "${consumer}/.design/templates/section-guidance.md" ]] \
     || fail "differing real file must not have been replaced"
+  [[ "$(cat "${consumer}/.design/templates/section-guidance.md")" == "$expected_content" ]] \
+    || fail "differing real file content was modified by the refused symlink attempt"
   pass "safe_symlink still refuses a pre-existing real file that differs from canonical"
 }
 
