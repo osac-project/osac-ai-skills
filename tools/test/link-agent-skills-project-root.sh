@@ -117,7 +117,61 @@ test_project_root_override_links_consumer() {
   pass "PROJECT_ROOT override links under consumer tree only"
 }
 
+test_safe_symlink_promotes_identical_real_file() {
+  # A consumer may have a pre-existing real file (not yet a symlink) whose
+  # content is byte-identical to the canonical source -- e.g. mid-rollout,
+  # before the consumer's own migration PR has merged to remove it. This
+  # must promote to a symlink with a WARN, not hard-fail the whole script.
+  local consumer vendor_skill name
+  consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-identical.XXXXXX")
+  mkdir -p "${consumer}/skills" "${consumer}/.design/templates"
+  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
+    [[ -d "$vendor_skill" ]] || continue
+    name=$(basename "$vendor_skill")
+    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
+  done
+  cp "${REPO_ROOT}/.design/templates/section-guidance.md" \
+    "${consumer}/.design/templates/section-guidance.md"
+
+  local out
+  out=$(PROJECT_ROOT="$consumer" "$SCRIPT" --claude 2>&1) \
+    || fail "script should succeed when pre-existing real file is identical to canonical (got: $out)"
+  echo "$out" | grep -q "promoting to symlink" \
+    || fail "expected a promotion WARN for the identical pre-existing real file"
+  [[ -L "${consumer}/.design/templates/section-guidance.md" ]] \
+    || fail "expected .design/templates/section-guidance.md to become a symlink after promotion"
+  pass "safe_symlink promotes a byte-identical pre-existing real file instead of erroring"
+}
+
+test_safe_symlink_refuses_differing_real_file() {
+  # A consumer's real file that differs from canonical content must still
+  # hard-fail -- this is the actual-conflict case, not a rollout-ordering
+  # artifact, and silently overwriting it would be data loss.
+  local consumer vendor_skill name
+  consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-differing.XXXXXX")
+  mkdir -p "${consumer}/skills" "${consumer}/.design/templates"
+  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
+    [[ -d "$vendor_skill" ]] || continue
+    name=$(basename "$vendor_skill")
+    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
+  done
+  echo "# locally-diverged content, not the canonical file" \
+    >"${consumer}/.design/templates/section-guidance.md"
+
+  if PROJECT_ROOT="$consumer" "$SCRIPT" --claude >/dev/null 2>/tmp/safe-symlink-refuse.err; then
+    fail "script should fail when pre-existing real file differs from canonical"
+  fi
+  grep -q "refusing to replace" /tmp/safe-symlink-refuse.err \
+    || fail "expected a refusing-to-replace ERROR for the differing pre-existing real file"
+  [[ ! -L "${consumer}/.design/templates/section-guidance.md" ]] \
+    || fail "differing real file must not have been replaced"
+  rm -f /tmp/safe-symlink-refuse.err
+  pass "safe_symlink still refuses a pre-existing real file that differs from canonical"
+}
+
 test_default_project_root_links_in_repo
 test_project_root_override_links_consumer
+test_safe_symlink_promotes_identical_real_file
+test_safe_symlink_refuses_differing_real_file
 
 echo "All link-agent-skills PROJECT_ROOT smoke tests passed."

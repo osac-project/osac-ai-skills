@@ -112,7 +112,14 @@ EOF
 }
 
 # Replace link_path with a symlink to target. Refuses to delete a real
-# file/directory (only removes an existing symlink or creates anew).
+# file/directory unless it's a regular file byte-identical to target — that
+# case is a one-time migration (a consumer's pre-existing hand-maintained
+# copy becoming a vendored symlink) rather than data loss, so it's promoted
+# to a symlink with a WARN instead of hard-erroring. This keeps a bucket's
+# rollout from requiring perfectly-ordered PR merges across repos: the
+# consumer's real file and the canonical source can briefly coexist with
+# identical content before the consumer's own migration PR removes the
+# real file, without bootstrap.sh hard-failing in between.
 safe_symlink() {
   local link_path="$1"
   local target="$2"
@@ -120,8 +127,13 @@ safe_symlink() {
   if [[ -L "${link_path}" ]]; then
     rm -f "${link_path}"
   elif [[ -e "${link_path}" ]]; then
-    echo "ERROR: ${link_path} exists and is not a symlink; refusing to replace" >&2
-    return 1
+    if [[ -f "${link_path}" && -f "${target}" ]] && cmp -s "${link_path}" "${target}"; then
+      echo "WARN: ${link_path} exists as a real file identical to ${target}; promoting to symlink" >&2
+      rm -f "${link_path}"
+    else
+      echo "ERROR: ${link_path} exists and is not a symlink; refusing to replace" >&2
+      return 1
+    fi
   fi
   ln -sfn "${target}" "${link_path}"
 }
