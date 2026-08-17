@@ -43,6 +43,19 @@ make_standalone_fixture() {
   printf '%s' "$isolated"
 }
 
+# Symlinks every native skill from REPO_ROOT/skills into a consumer's
+# skills/ dir (consumer overlay). Shared by the fixtures below to avoid
+# re-pasting this loop in each test.
+link_native_skills_into() {
+  local consumer="$1" vendor_skill name
+  mkdir -p "${consumer}/skills"
+  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
+    [[ -d "$vendor_skill" ]] || continue
+    name=$(basename "$vendor_skill")
+    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
+  done
+}
+
 # --- Contracts ---
 
 test_default_project_root_links_in_repo() {
@@ -67,17 +80,9 @@ test_default_project_root_links_in_repo() {
 }
 
 test_project_root_override_links_consumer() {
-  local consumer vendor_skill
+  local consumer
   consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer.XXXXXX")
-  mkdir -p "${consumer}/skills"
-
-  # Materialize native skills as symlinks (consumer overlay).
-  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
-    [[ -d "$vendor_skill" ]] || continue
-    local name
-    name=$(basename "$vendor_skill")
-    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
-  done
+  link_native_skills_into "$consumer"
   [[ -r "${consumer}/skills/create-pr/SKILL.md" ]] || fail "fixture missing create-pr"
 
   # Stub ai-workflows under the consumer for --with-ai-workflows.
@@ -122,14 +127,10 @@ test_safe_symlink_promotes_identical_real_file() {
   # content is byte-identical to the canonical source -- e.g. mid-rollout,
   # before the consumer's own migration PR has merged to remove it. This
   # must promote to a symlink with a WARN, not hard-fail the whole script.
-  local consumer vendor_skill name
+  local consumer
   consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-identical.XXXXXX")
-  mkdir -p "${consumer}/skills" "${consumer}/.design/templates"
-  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
-    [[ -d "$vendor_skill" ]] || continue
-    name=$(basename "$vendor_skill")
-    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
-  done
+  link_native_skills_into "$consumer"
+  mkdir -p "${consumer}/.design/templates"
   cp "${REPO_ROOT}/.design/templates/section-guidance.md" \
     "${consumer}/.design/templates/section-guidance.md"
 
@@ -147,25 +148,20 @@ test_safe_symlink_refuses_differing_real_file() {
   # A consumer's real file that differs from canonical content must still
   # hard-fail -- this is the actual-conflict case, not a rollout-ordering
   # artifact, and silently overwriting it would be data loss.
-  local consumer vendor_skill name
+  local consumer out
   consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-differing.XXXXXX")
-  mkdir -p "${consumer}/skills" "${consumer}/.design/templates"
-  for vendor_skill in "${REPO_ROOT}/skills"/*/; do
-    [[ -d "$vendor_skill" ]] || continue
-    name=$(basename "$vendor_skill")
-    ln -sfn "${vendor_skill%/}" "${consumer}/skills/${name}"
-  done
+  link_native_skills_into "$consumer"
+  mkdir -p "${consumer}/.design/templates"
   echo "# locally-diverged content, not the canonical file" \
     >"${consumer}/.design/templates/section-guidance.md"
 
-  if PROJECT_ROOT="$consumer" "$SCRIPT" --claude >/dev/null 2>/tmp/safe-symlink-refuse.err; then
-    fail "script should fail when pre-existing real file differs from canonical"
+  if out=$(PROJECT_ROOT="$consumer" "$SCRIPT" --claude 2>&1); then
+    fail "script should fail when pre-existing real file differs from canonical (got: $out)"
   fi
-  grep -q "refusing to replace" /tmp/safe-symlink-refuse.err \
+  echo "$out" | grep -q "refusing to replace" \
     || fail "expected a refusing-to-replace ERROR for the differing pre-existing real file"
   [[ ! -L "${consumer}/.design/templates/section-guidance.md" ]] \
     || fail "differing real file must not have been replaced"
-  rm -f /tmp/safe-symlink-refuse.err
   pass "safe_symlink still refuses a pre-existing real file that differs from canonical"
 }
 
