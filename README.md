@@ -36,6 +36,15 @@ PROJECT_ROOT=/path/to/consumer \
   /path/to/.osac-ai-skills/tools/link-agent-skills.sh --all --with-ai-workflows
 ```
 
+`--verify` checks the existing tree and exits non-zero on failure. Alone, it
+does not create links. Combined with linking flags (`--all`, `--claude`,
+`--cursor`, `--gemini`, `--with-ai-workflows`), the script performs the
+requested linking first, then verifies:
+
+```bash
+tools/link-agent-skills.sh --all --with-ai-workflows --verify
+```
+
 ### Shared rules, agents, hook docs, and design context
 
 Beyond skill symlinks, the fan-out also materializes canonical content that

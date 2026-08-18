@@ -99,7 +99,8 @@ Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--all] [--with-ai-work
   --all                 Link all agent directories (default when no link flag is given)
   --with-ai-workflows   Also symlink flightctl/ai-workflows under skills/ (opt-in;
                         consumers that bootstrap ai-workflows pass this)
-  --verify              Verify symlinks and OSAC skill files; exit non-zero on failure
+  --verify              Verify existing symlinks and skill files without linking.
+                        Combined with linking flags, link first then verify.
 
 Always materializes .design/context/*.md, .design/templates/*.md, and
 .prd/templates/*.md (agent-agnostic; read by skill instructions or
@@ -409,12 +410,17 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ "${VERIFY_ONLY}" == true ]]; then
-  if [[ "${LINK_CLAUDE}" == false && "${LINK_CURSOR}" == false && "${LINK_GEMINI}" == false ]]; then
-    LINK_CLAUDE=true
-    LINK_CURSOR=true
-    LINK_GEMINI=true
-  fi
+# --verify with no linking flags checks the existing tree without mutating it.
+# Combined with --claude/--cursor/--gemini/--all/--with-ai-workflows, fall
+# through so the requested links are created before run_verify.
+if [[ "${VERIFY_ONLY}" == true \
+   && "${LINK_CLAUDE}" == false \
+   && "${LINK_CURSOR}" == false \
+   && "${LINK_GEMINI}" == false \
+   && "${LINK_AI_WORKFLOWS}" == false ]]; then
+  LINK_CLAUDE=true
+  LINK_CURSOR=true
+  LINK_GEMINI=true
   run_verify
   exit $?
 fi
