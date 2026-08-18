@@ -176,9 +176,76 @@ test_safe_symlink_refuses_differing_real_file() {
   pass "safe_symlink still refuses a pre-existing real file that differs from canonical"
 }
 
+test_verify_with_linking_flags_links_then_verifies() {
+  # Combined --all --with-ai-workflows --verify on a fresh consumer tree
+  # (native skills present, agent umbrellas not) must link first, then verify.
+  local consumer out rc=0 had_repo_claude=0
+  consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-verify-link.XXXXXX")
+  link_native_skills_into "$consumer"
+  mkdir -p "${consumer}/home" \
+    "${consumer}/.ai-workflows/bugfix" \
+    "${consumer}/.ai-workflows/design" \
+    "${consumer}/.ai-workflows/e2e" \
+    "${consumer}/.ai-workflows/implement" \
+    "${consumer}/.ai-workflows/prd" \
+    "${consumer}/.ai-workflows/_shared"
+  echo '# stub' >"${consumer}/.ai-workflows/bugfix/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/design/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/e2e/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/implement/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/prd/SKILL.md"
+
+  [[ -e "${REPO_ROOT}/.claude/skills" ]] && had_repo_claude=1
+
+  out=$(HOME="${consumer}/home" PROJECT_ROOT="$consumer" \
+    "$SCRIPT" --all --with-ai-workflows --verify 2>&1) || rc=$?
+  [[ "$rc" -eq 0 ]] || fail "expected combined --verify to succeed after linking (rc=$rc): $out"
+  echo "$out" | grep -q "Linking agent skill directories" \
+    || fail "expected linking step before verify, got: $out"
+  echo "$out" | grep -q "Verification passed" \
+    || fail "expected verification to pass after linking, got: $out"
+
+  [[ -L "${consumer}/.claude/skills" ]] || fail ".claude/skills is not a symlink after combined --verify"
+  [[ -L "${consumer}/.cursor/skills" ]] || fail ".cursor/skills is not a symlink after combined --verify"
+  [[ -L "${consumer}/.gemini/skills" ]] || fail ".gemini/skills is not a symlink after combined --verify"
+  [[ -L "${consumer}/skills/bugfix" ]] || fail "expected skills/bugfix after --with-ai-workflows --verify"
+  [[ -r "${consumer}/skills/bugfix/SKILL.md" ]] || fail "cannot read skills/bugfix after combined --verify"
+
+  if [[ "${had_repo_claude}" -eq 0 ]]; then
+    [[ ! -e "${REPO_ROOT}/.claude/skills" ]] \
+      || fail "combined --verify created ${REPO_ROOT}/.claude/skills (expected isolation)"
+  fi
+  pass "--all --with-ai-workflows --verify links then verifies on a fresh tree"
+}
+
+test_verify_only_does_not_link() {
+  # --verify with no linking flags must not create agent umbrellas.
+  local isolated out rc=0
+  isolated=$(make_standalone_fixture)
+  mkdir -p "${isolated}/home"
+
+  unset PROJECT_ROOT || true
+  out=$(cd "$isolated" && HOME="${isolated}/home" ./tools/link-agent-skills.sh --verify 2>&1) || rc=$?
+  [[ "$rc" -ne 0 ]] || fail "expected --verify to fail when agent umbrellas are missing (got: $out)"
+  echo "$out" | grep -qi "is not a symlink" \
+    || fail "expected missing-symlink error from --verify, got: $out"
+  if echo "$out" | grep -q "Linking agent skill directories"; then
+    fail "verify-only started linking: $out"
+  fi
+  [[ ! -e "${isolated}/.claude/skills" && ! -L "${isolated}/.claude/skills" ]] \
+    || fail "--verify created .claude/skills"
+  [[ ! -e "${isolated}/.cursor/skills" && ! -L "${isolated}/.cursor/skills" ]] \
+    || fail "--verify created .cursor/skills"
+  [[ ! -e "${isolated}/.gemini/skills" && ! -L "${isolated}/.gemini/skills" ]] \
+    || fail "--verify created .gemini/skills"
+  pass "--verify alone does not link"
+}
+
 test_default_project_root_links_in_repo
 test_project_root_override_links_consumer
 test_safe_symlink_promotes_identical_real_file
 test_safe_symlink_refuses_differing_real_file
+test_verify_only_does_not_link
+test_verify_with_linking_flags_links_then_verifies
 
 echo "All link-agent-skills PROJECT_ROOT smoke tests passed."
