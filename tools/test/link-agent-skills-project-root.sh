@@ -241,11 +241,46 @@ test_verify_only_does_not_link() {
   pass "--verify alone does not link"
 }
 
+test_verify_with_ai_workflows_only_links_workflows() {
+  # --with-ai-workflows --verify (no --claude/--all) must still wire
+  # workflow skill links. --all is not required to skip the verify-only
+  # early-exit; otherwise LINK_AI_WORKFLOWS is parsed and ignored.
+  local consumer out rc=0
+  consumer=$(mktemp -d "${TMPDIR_ROOT}/consumer-verify-wf.XXXXXX")
+  link_native_skills_into "$consumer"
+  mkdir -p "${consumer}/home" \
+    "${consumer}/.ai-workflows/bugfix" \
+    "${consumer}/.ai-workflows/design" \
+    "${consumer}/.ai-workflows/e2e" \
+    "${consumer}/.ai-workflows/implement" \
+    "${consumer}/.ai-workflows/prd" \
+    "${consumer}/.ai-workflows/_shared"
+  echo '# stub' >"${consumer}/.ai-workflows/bugfix/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/design/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/e2e/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/implement/SKILL.md"
+  echo '# stub' >"${consumer}/.ai-workflows/prd/SKILL.md"
+
+  out=$(HOME="${consumer}/home" PROJECT_ROOT="$consumer" \
+    "$SCRIPT" --with-ai-workflows --verify 2>&1) || rc=$?
+  [[ "$rc" -eq 0 ]] || fail "expected --with-ai-workflows --verify to succeed (rc=$rc): $out"
+  echo "$out" | grep -q "Linking agent skill directories" \
+    || fail "expected linking step for --with-ai-workflows --verify, got: $out"
+  echo "$out" | grep -q "Verification passed" \
+    || fail "expected verification to pass after workflow linking, got: $out"
+  [[ -L "${consumer}/skills/bugfix" ]] \
+    || fail "expected skills/bugfix after --with-ai-workflows --verify"
+  [[ ! -e "${consumer}/.claude/skills" && ! -L "${consumer}/.claude/skills" ]] \
+    || fail "--with-ai-workflows --verify created .claude/skills without --claude/--all"
+  pass "--with-ai-workflows --verify links workflows without agent umbrellas"
+}
+
 test_default_project_root_links_in_repo
 test_project_root_override_links_consumer
 test_safe_symlink_promotes_identical_real_file
 test_safe_symlink_refuses_differing_real_file
 test_verify_only_does_not_link
 test_verify_with_linking_flags_links_then_verifies
+test_verify_with_ai_workflows_only_links_workflows
 
 echo "All link-agent-skills PROJECT_ROOT smoke tests passed."
