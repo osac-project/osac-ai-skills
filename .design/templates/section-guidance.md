@@ -79,11 +79,13 @@ For OSAC, this typically includes:
 - Finalizers for cleanup
 - Changes to existing resources owned by other teams
 
+**Ceiling:** Name each extension and its schema shape (field names and types, described as prose or a list — not literal source syntax) — not full definitions. Never include, in any implementation language (Go, Python, Ansible YAML, Helm templates, shell), full struct/type/interface definitions or full function/method/task implementations, or handler/reconciler/playbook pseudocode and numbered algorithm-step walkthroughs (e.g. "Server: X Handler", "Reconciler: Y Resolution" breakdowns, full Ansible task lists) — describe what each handler, reconciler, or task does in 1-2 sentences of prose instead, naming the same specific values (field names, defaults, constraints) the code would have shown — not vague categories.
+
 List each extension and note operational impact (what happens if the controller is down?).
 
 ### Implementation Details/Notes/Constraints
 
-This is where technical depth lives. Include:
+This is where technical depth lives — as prose, not code. **Ceiling:** Proto/CRD schema shape (field names and types, described as prose or a list — not literal source syntax) is always allowed — see the schema bullet below. Never include, in any implementation language (Go, Python, Ansible YAML, Helm templates, shell), full struct/type/interface definitions or full function/method/task implementations, or pseudocode and numbered algorithm-step walkthroughs. Describe control flow, state machines, reconciliation logic, and playbook/task behavior in 2-4 sentences of prose per component instead, naming the same specific values (field names, defaults, constraints) the code would have shown — not vague categories. Include:
 - Proto schema snippets following the standard object shape (`id`, `Metadata`, `<Type>Spec`, `<Type>Status`) and conventions in [`osac/fulfillment-service/docs/API.md`](https://github.com/osac-project/osac/blob/main/fulfillment-service/docs/API.md) — spec for desired state, status for observed state, conditions for lifecycle, declarative design (no imperative methods)
 - Database schema considerations (new tables, migrations)
 - Controller reconciliation logic (state machine, finalizer flow)
