@@ -7,7 +7,7 @@ conventions in more depth, see [`AGENTS.md`](AGENTS.md).
 
 ## Adding a New Skill
 
-1. Create `skills/{name}/` (lowercase, hyphens) with a `SKILL.md`:
+1. Create `skills/<name>/` (lowercase, hyphens) with a `SKILL.md`:
 
    ```yaml
    ---
@@ -22,7 +22,7 @@ conventions in more depth, see [`AGENTS.md`](AGENTS.md).
    Structure section allows, and reference every bundled file from
    `SKILL.md` (directly or transitively) — see [`AGENTS.md`](AGENTS.md)
    for the exact rules skillsaw enforces here.
-3. Run `make skillsaw SKILL=skills/{name}/` and fix anything it flags.
+3. Run `make skillsaw SKILL=skills/<name>/` and fix anything it flags.
 4. Open a PR (see below).
 
 ## Modifying an Existing Skill

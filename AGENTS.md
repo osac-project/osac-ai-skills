@@ -119,7 +119,7 @@ for setup, prerequisites, and how to run a case — not duplicated here.
 ```text
 osac-ai-skills/
 ├── skills/                          # Agent Skills — one directory per skill
-│   └── <skill-name>/
+│   └── <name>/
 │       ├── SKILL.md                # Required: frontmatter + entry point
 │       ├── references/             # Optional, e.g. — see Skill Structure for the full allowed set
 │       ├── scripts/                # Optional, e.g.
@@ -150,4 +150,5 @@ osac-ai-skills/
 ## Development
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to add or modify a skill,
-PR expectations, the version-bump requirement, and who reviews a PR.
+PR expectations, and who reviews a PR (version-bump mechanics are covered
+above in Versioning).
