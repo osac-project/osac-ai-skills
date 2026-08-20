@@ -118,30 +118,33 @@ for setup, prerequisites, and how to run a case — not duplicated here.
 
 ```text
 osac-ai-skills/
-├── skills/                    # Agent Skills — one directory per skill
+├── skills/                          # Agent Skills — one directory per skill
 │   └── <skill-name>/
-│       ├── SKILL.md           # Required: frontmatter + entry point
-│       ├── references/        # Optional
-│       ├── scripts/            # Optional
-│       └── evals/              # Optional
-├── tools/                     # Shared shell helpers + fan-out script
-│   ├── link-agent-skills.sh   # Consumer fan-out (see README.md)
+│       ├── SKILL.md                # Required: frontmatter + entry point
+│       ├── references/             # Optional, e.g. — see Skill Structure for the full allowed set
+│       ├── scripts/                # Optional, e.g.
+│       └── evals/                  # Optional, e.g.
+├── tools/                           # Shared shell helpers + fan-out script
+│   ├── link-agent-skills.sh        # Consumer fan-out (see README.md)
 │   ├── resolve-remotes.sh
 │   ├── jira-safe-create.sh
 │   ├── check-skill-version-bump.sh
-│   └── test/                  # Smoke/static tests for tools/ and skill families
-├── evals/                      # Skill-quality eval harness (see evals/README.md)
-├── .design/                    # Design-workflow context/templates (fan-out — see README.md)
-├── .prd/                       # PRD-workflow templates (fan-out — see README.md)
-├── .claude/rules/, agents/, hooks/  # Shared canonical content (fan-out — see README.md)
-├── .github/workflows/          # skillsaw, skillsaw-review, skill-version-check
-├── .skillsaw.yaml              # skillsaw rule configuration
-├── OWNERS                      # Approvers / reviewers
-├── Makefile                    # `make skillsaw`
-├── README.md                   # Consumer fan-out mechanics
-├── AGENTS.md                   # This file
-├── CLAUDE.md                   # Claude Code entry point (points here)
-└── CONTRIBUTING.md              # Human contributor walkthrough
+│   └── test/                       # Smoke/static tests for tools/ and skill families
+├── evals/                           # Skill-quality eval harness (see evals/README.md)
+├── .design/                         # Design-workflow context/templates (fan-out — see README.md)
+├── .prd/                            # PRD-workflow templates (fan-out — see README.md)
+├── .claude/
+│   ├── rules/                       # Shared canonical content (fan-out — see README.md)
+│   ├── agents/                      # Shared canonical content (fan-out — see README.md)
+│   └── hooks/                       # Shared canonical content (fan-out — see README.md)
+├── .github/workflows/               # skillsaw, skillsaw-review, skill-version-check
+├── .skillsaw.yaml                   # skillsaw rule configuration
+├── OWNERS                           # Approvers / reviewers
+├── Makefile                         # `make skillsaw`
+├── README.md                        # Consumer fan-out mechanics
+├── AGENTS.md                        # This file
+├── CLAUDE.md                        # Claude Code entry point (points here)
+└── CONTRIBUTING.md                  # Human contributor walkthrough
 ```
 
 ## Development
