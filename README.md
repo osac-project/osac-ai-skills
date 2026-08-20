@@ -16,6 +16,9 @@ until cutover also `osac-workspace/bootstrap.sh`. `flightctl/ai-workflows`
 remains a separate vendored dependency of those consumers; it is not hosted
 here.
 
+For skill-authoring conventions, versioning rules, and how to contribute a
+skill, see [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Consumer fan-out
 
 From a standalone clone of this repo:
