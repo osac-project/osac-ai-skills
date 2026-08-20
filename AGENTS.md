@@ -4,10 +4,10 @@ This file provides guidance to AI coding assistants working in this repository.
 
 ## Project Overview
 
-`osac-ai-skills` hosts OSAC-native [Agent Skills](https://skillsaw.org/)
-(`skills/`) plus the tooling that lints, validates, and vendors them —
-shared shell helpers (`tools/`), a skill-quality eval harness (`evals/`),
-and skillsaw lint/review CI.
+`osac-ai-skills` hosts OSAC-native Agent Skills (`skills/`) plus the
+tooling that lints, validates, and vendors them — shared shell helpers
+(`tools/`), a skill-quality eval harness (`evals/`), and skillsaw
+lint/review CI (see Skill-Quality Linting below for the `skillsaw` link).
 
 Consumers (currently `osac-workspace`, later the `osac` mono-repo) vendor
 this repo as a dependency and fan its content out into their own

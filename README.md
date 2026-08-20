@@ -1,12 +1,12 @@
 # osac-ai-skills
 
-[Agent Skills](https://skillsaw.org/) and supporting tooling for
+Agent Skills and supporting tooling for
 [OSAC](https://github.com/osac-project/docs) (Open Sovereign AI Cloud) — an
 open source fulfillment system for provisioning Kubernetes clusters and
 compute instances with networking capabilities. This repository hosts:
 
 - Native Agent Skills under `skills/`
-- Skillsaw lint config and CI (`.skillsaw.yaml`, `.github/workflows/`)
+- [Skillsaw](https://skillsaw.org/) lint config and CI (`.skillsaw.yaml`, `.github/workflows/`)
 - Generic agent skill fan-out (`tools/link-agent-skills.sh`)
 - Shared helper scripts consumed by specific skills (`tools/resolve-remotes.sh`,
   `tools/jira-safe-create.sh`)
