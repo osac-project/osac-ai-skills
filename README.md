@@ -1,12 +1,9 @@
 # osac-ai-skills
 
-Agent Skills and supporting tooling for [OSAC](https://github.com/osac-project/docs)
-(Open Sovereign AI Cloud) — an open source fulfillment system for
-provisioning Kubernetes clusters and compute instances with networking
-capabilities.
-
-Dedicated repository for OSAC's [Agent Skills](https://skillsaw.org/) and the
-tooling that exists to support or validate them:
+[Agent Skills](https://skillsaw.org/) and supporting tooling for
+[OSAC](https://github.com/osac-project/docs) (Open Sovereign AI Cloud) — an
+open source fulfillment system for provisioning Kubernetes clusters and
+compute instances with networking capabilities. This repository hosts:
 
 - Native Agent Skills under `skills/`
 - Skillsaw lint config and CI (`.skillsaw.yaml`, `.github/workflows/`)
@@ -77,9 +74,8 @@ files already there (e.g. a workspace-only rule with no reason to be shared):
   same reason as `.design/context/*.md`.
 
 `reference/*.md` (codebase-analysis excerpts like `ARCHITECTURE.md`,
-`CONVENTIONS.md`) is intentionally **not** centralized here — per
-[OSAC-4008](https://redhat.atlassian.net/browse/OSAC-4008), those document a
-specific downstream codebase's current internals, not portable skill
+`CONVENTIONS.md`) is intentionally **not** centralized here — those document
+a specific downstream codebase's current internals, not portable skill
 guidance, and live in `osac/docs/` instead, co-located with the code they
 analyze.
 

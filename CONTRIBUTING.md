@@ -41,8 +41,13 @@ make skillsaw
 
 This is the same check that runs on every PR (see [`AGENTS.md`](AGENTS.md)'s
 Skill-Quality Linting section for scope and enforcement details) — fix
-everything it reports before pushing. There's no other local "testing your
-change" step: this repository has no install script to smoke-test against.
+everything it reports before pushing. There's no install script to
+smoke-test against (unlike `flightctl/ai-workflows`'s `install.sh cursor`).
+
+If your change touches shared tooling in `tools/`, also run that script's
+smoke test under `tools/test/` (see each script's header for invocation).
+If it touches an eval-covered skill (`prd-review`, `design-review`), also
+run the relevant case — see [`evals/README.md`](evals/README.md).
 
 ## PR Conventions
 
