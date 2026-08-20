@@ -1,7 +1,12 @@
 # osac-ai-skills
 
-Dedicated repository for OSAC AI skills and the tooling that only exists to
-support or validate them:
+Agent Skills and supporting tooling for [OSAC](https://github.com/osac-project/docs)
+(Open Sovereign AI Cloud) — an open source fulfillment system for
+provisioning Kubernetes clusters and compute instances with networking
+capabilities.
+
+Dedicated repository for OSAC's [Agent Skills](https://skillsaw.org/) and the
+tooling that exists to support or validate them:
 
 - Native Agent Skills under `skills/`
 - Skillsaw lint config and CI (`.skillsaw.yaml`, `.github/workflows/`)
