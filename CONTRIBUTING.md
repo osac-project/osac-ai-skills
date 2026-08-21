@@ -52,8 +52,10 @@ run the relevant case — see [`evals/README.md`](evals/README.md).
 ## PR Conventions
 
 Follow this repository's standard commit/PR conventions — title and commit
-format, DCO sign-off, AI attribution, and fork-based push — documented
-once in [`.claude/rules/dev-conventions.md`](.claude/rules/dev-conventions.md).
+format, DCO sign-off, AI-assistance attribution (an `Assisted-by:` trailer,
+never `Co-Authored-By`, on any AI-assisted commit), and fork-based push —
+full detail documented once in
+[`.claude/rules/dev-conventions.md`](.claude/rules/dev-conventions.md).
 
 No repository-specific PR template exists today. A useful shape to follow
 (seen in prior merged PRs): a `## <Title>` heading, a link to the Jira
