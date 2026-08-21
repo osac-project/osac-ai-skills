@@ -1,9 +1,9 @@
 ---
 name: review-gate
-description: Local pre-flight review gate that runs performance and security reviews against everything this branch has changed since diverging from a base ref (main by default, via merge-base — not a raw diff against the base's current tip) before PR submission, covering committed, staged, and unstaged changes uniformly. Orchestrates the performance-review and security-review skills in sequence and aggregates their findings into one actionable report. Use standalone before opening a PR, or automatically as a step in create-pr. Blocks on critical/important findings from either reviewer.
+description: Local pre-flight review gate that runs performance and security reviews against everything this branch has changed since diverging from a base ref (main by default, via merge-base — not a raw diff against the base's current tip) before PR submission, covering committed, staged, and unstaged changes uniformly. Orchestrates the performance-review and security-review skills in sequence and aggregates their findings into one actionable report. Use standalone before opening a PR — create-pr's own Step 4 pre-flight gate invokes reviewers directly per its config-driven list (skills/.config/create-pr-reviewers.yaml) and does not call this skill. Blocks on critical/important findings from either reviewer.
 allowed-tools: Read, Grep, Bash, Glob
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Pre-Flight Review Gate
@@ -12,13 +12,18 @@ Runs OSAC's local review swarm — `performance-review` then `security-review`
 — against **the diff from where this branch last agreed with `{BASE}`**,
 plus any untracked files: everything this branch has changed since it
 diverged, committed or not, staged or not, and even files never `git add`-ed
-at all. `{BASE}` is `main` by default — see Parameters. Uniform whether run
-standalone mid-work or invoked by `create-pr` right before push. See Step 1
-for why "since it diverged" and not just "diff against `{BASE}`" matters.
+at all. `{BASE}` is `main` by default — see Parameters. See Step 1 for why
+"since it diverged" and not just "diff against `{BASE}`" matters.
 
-This is the last local checkpoint before a change leaves the machine: run it
-standalone whenever you want a pre-flight pass, or let `create-pr` invoke it
-automatically as its final gate before pushing.
+This is a pre-flight checkpoint for a change before it leaves the machine:
+run it standalone whenever you want a two-reviewer pass without going
+through `create-pr`. `create-pr`'s own Step 4 pre-flight gate does **not**
+invoke this skill — it spawns reviewers directly from
+`skills/.config/create-pr-reviewers.yaml`'s config-driven list (currently
+three reviewers, not the two this skill always pairs), using a different
+output contract (a results table, not this skill's `[SEVERITY] file:line —
+description — fix` line format). See
+`skills/create-pr/references/reviewer-config.md` for that mechanism.
 
 **Announce at start:** "Using the review-gate skill to run the pre-flight review."
 
@@ -208,15 +213,46 @@ reviewer's output must be either:
 - at least one line in the form `[CRITICAL|IMPORTANT|ADVISORY] file:line —
   description — suggested fix`, or
 - the exact phrase `"performance review: no findings"` /
-  `"security review: no findings"`.
+  `"security review: no findings"`, optionally preceded by leading prose —
+  see the tolerance rule below.
+
+**Both the stray-verdict rejection and the leading-prose tolerance below
+use the exact judgment-call algorithm `create-pr`'s Output Contract
+defines canonically** — see
+`skills/create-pr/references/reviewer-config.md`'s Output Contract for the
+full reasoning, worked positive/negative examples, and the design history
+behind why an exact-match-only bare string is itself a false-`INVALID`
+bug. Only the final output *shape* differs (a findings line or the literal
+"no findings" phrase here, vs. a table row there); the decision procedure
+is identical, so it isn't re-derived below. Applied to review-gate's
+shape:
+
+- **Stray verdict, unconditional:** if a reviewer's raw output contains
+  `verdict: pass` or `verdict: blocked` anywhere, case-insensitively, the
+  output is invalid — full stop, before the tolerance judgment below even
+  runs. Neither reviewer computes PASS/BLOCKED; only this skill's Step 4
+  does.
+- **Leading-prose tolerance:** before discarding any leading text ahead of
+  a findings line or the "no findings" phrase, judge whether it names a
+  concrete `CRITICAL`/`IMPORTANT` problem that's genuinely absent from
+  everything that follows — not just absent from a literal "no findings"
+  match. A reviewer that narrates a real finding and then reports only an
+  unrelated line about a different file has dropped it just as much as if
+  it had said "no findings" outright. If the narrated problem is absent
+  from every findings line that follows, don't discard the prose — the
+  output is invalid. If the narrated problem *is* one of the findings
+  lines, that's ordinary "narrate before reporting" behavior, not a leak;
+  discard normally.
 
 If either reviewer's output is missing, empty, or doesn't match one of
-these two forms — a reviewer step was skipped, crashed, returned free text
-with no severity labels, or anything else that doesn't parse — that is
-itself a gate failure, distinct from BLOCKED. Do not treat an unparseable
-or absent reviewer section as "no findings" and do not let it produce a
-PASS. Stop and report which reviewer's output was invalid or missing. A
-gate that can't verify what a reviewer found has not passed.
+these two forms after applying the tolerance above — a reviewer step was
+skipped, crashed, returned free text with no severity labels, narrated a
+real finding and then claimed "no findings" anyway, or anything else that
+doesn't parse — that is itself a gate failure, distinct from BLOCKED. Do
+not treat an unparseable or absent reviewer section as "no findings" and do
+not let it produce a PASS. Stop and report which reviewer's output was
+invalid or missing. A gate that can't verify what a reviewer found has not
+passed.
 
 Once both outputs validate, merge them into one, in this shape:
 

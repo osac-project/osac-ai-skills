@@ -2,7 +2,7 @@
 name: create-pr
 description: Create a PR on an OSAC component repo (including the osac mono-repo, which may need per-component validation for multiple touched components in one pass) using the fork-based workflow. Runs repo-specific validation (build, test, lint), pushes to the developer's push remote, and opens a PR against the upstream repo with proper title format. Use when the user says 'create PR', 'open PR', 'submit for review', 'push and create PR', or when finishing a feature branch.
 metadata:
-  version: "0.1.3"
+  version: "0.2.0"
 ---
 
 # Create PR
@@ -64,130 +64,57 @@ actually touches instead of assuming a single component:
 ```bash
 # Keep the (fulfillment-service|osac-operator|osac-aap|osac-installer|
 # bare-metal-fulfillment-operator|osac-csi-driver) list in sync with
-# bootstrap.sh's MERGED_COMPONENTS array and Step 3's File Classification
-# table below if a future component merges into osac or one of these splits
-# out.
+# bootstrap.sh's MERGED_COMPONENTS array (in consumer repos), references/
+# file-classification.md's File Classification table, and references/
+# validation-commands.md's per-component "## <name>" sections, if a future
+# component merges into osac or one of these splits out.
+#
+# KNOWN GAP: osac-metering is a real mono-repo subdirectory (consumer
+# AGENTS.md) absent from all four lists above, with no build/test tooling
+# defined yet -- flagged below (UNSUPPORTED_COMPONENTS_TOUCHED) instead of
+# guessed commands, so it's never silently treated as "no component touched."
 if [[ "$REPO_NAME" == "osac" ]]; then
-  # Split the diff and the filter into two steps: a `git diff` failure must
-  # still propagate under `set -e`/`pipefail`, but "no merged-component
-  # subdirectory touched" is a valid, empty-string-producing outcome — awk
-  # exits 0 on zero matching lines, so no trailing `|| true` is needed (which
-  # would otherwise mask a genuine `git diff` failure too).
-  CHANGED_PATHS=$(git diff main..HEAD --name-only)
+  # Diff from the merge-base, not a raw two-ref diff against main's current
+  # tip — see review-gate's Step 1 for why (main advancing after divergence
+  # would otherwise misclassify touched components). No trailing `|| true`
+  # on the awk pipelines: "nothing matched" is a valid empty result, but a
+  # genuine `git diff`/`git merge-base` failure must still propagate.
+  MERGE_BASE_FOR_COMPONENTS=$(git merge-base main HEAD)
+  CHANGED_PATHS=$(git diff "$MERGE_BASE_FOR_COMPONENTS" --name-only)
   TOUCHED_COMPONENTS=$(printf '%s\n' "$CHANGED_PATHS" \
     | awk -F/ '$1 ~ /^(fulfillment-service|osac-operator|osac-aap|osac-installer|bare-metal-fulfillment-operator|osac-csi-driver)$/ { print $1 }' \
     | sort -u)
+  UNSUPPORTED_COMPONENTS_TOUCHED=$(printf '%s\n' "$CHANGED_PATHS" \
+    | awk -F/ '$1 == "osac-metering" { print $1 }' | sort -u)
 else
   TOUCHED_COMPONENTS="$REPO_NAME"
+  UNSUPPORTED_COMPONENTS_TOUCHED=""
 fi
 ```
 
 `$TOUCHED_COMPONENTS` may list zero, one, or multiple names. Use it in Steps 2
 and 3 to select which per-component block(s) apply — run every matching block,
-not just the first. If it's empty because the change is purely doc/config
-outside all six subdirectories (e.g. `osac/README.md`), skip the
-component-specific parts of Steps 2 and 3. If it's empty but the change
-touches root-level files that affect multiple components' builds (e.g.
-`osac/go.work`, a root `Makefile`, `.github/workflows/`), don't skip
-validation entirely — read `osac`'s own `AGENTS.md`/`CLAUDE.md` for the
-correct root-level check (a broken `go.work` can break both
-`fulfillment-service` and `osac-operator` builds without either
-component's own validation block catching it).
+not just the first. Three distinct cases, not two:
+
+- **Both empty** — a genuine no-component change (e.g. `osac/README.md`).
+  Skip the component-specific parts of Steps 2 and 3.
+- **`$UNSUPPORTED_COMPONENTS_TOUCHED` non-empty** (currently only
+  `osac-metering`) — **stop**, don't skip. Read that component's own
+  CLAUDE.md/Makefile, confirm the correct build/lint/test sequence
+  manually, and only then continue.
+- **`$TOUCHED_COMPONENTS` empty but root-level files affecting multiple
+  builds are touched** (`osac/go.work`, a root `Makefile`,
+  `.github/workflows/`) — don't skip validation, read `osac`'s own
+  `AGENTS.md`/`CLAUDE.md` for the correct root-level check.
 
 ## Step 2: Run Validation
 
-Run the checks for every component in `$TOUCHED_COMPONENTS` **before** pushing
-— if it lists more than one, run **every** matching block below in the same
-pass; that's the point of one PR covering multiple mono-repo components. Read
-the component's CLAUDE.md if unsure which commands apply.
-
-### fulfillment-service
-
-```bash
-cd "$REPO_DIR/fulfillment-service"
-gofmt -s -w . && git diff --exit-code
-buf generate && git diff --exit-code
-go build ./...
-ginkgo run -r internal
-uv run dev.py lint
-```
-
-### osac-operator
-
-```bash
-cd "$REPO_DIR/osac-operator"
-make fmt && git diff --exit-code
-make lint
-make build
-make test
-make manifests generate && git diff --exit-code
-```
-
-### osac-aap
-
-```bash
-cd "$REPO_DIR/osac-aap"
-make test
-uv run ansible-lint
-```
-
-### osac-installer
-
-```bash
-cd "$REPO_DIR/osac-installer"
-helm dependency build charts/osac/
-helm lint charts/osac-operators/
-helm lint charts/osac-prereqs/
-for f in values/*/values.yaml; do
-  helm template osac charts/osac/ --values "$f" \
-    --set service.externalHostname=fulfillment-api.example.com \
-    --set service.internalHostname=fulfillment-internal-api.example.com \
-    > /dev/null
-done
-```
-
-Reproduces the environment-values templating step of the `helm-lint-installer` job in
-`osac`'s `.github/workflows/helm-lint.yaml` — not full CI parity (that job also runs
-`ct lint --all --config ct.yaml`, templates `charts/osac/ci/*-values.yaml`, and validates
-`values.schema.json` is well-formed JSON; see the workflow for those). `charts/osac/`'s
-values schema requires `service.externalHostname`/`internalHostname`, which every real
-values file leaves blank for runtime injection, so linting/templating the umbrella chart
-needs the same placeholder `--set` overrides CI uses — a bare `helm lint charts/osac/`
-(e.g. via `make helm-lint`) fails on schema validation regardless of what the PR actually
-changes.
-
-Image tags in `values/*/values.yaml` are unpinned (`latest`) for every mono-repo
-component, including `osac-csi-driver` — `scripts/sync-image-tags.sh` was removed
-upstream (`OSAC-3367`); there is no sync step to run. Real release tags are set
-automatically by `osac`'s own CI at release time, not by a feature PR.
-
-### bare-metal-fulfillment-operator
-
-```bash
-cd "$REPO_DIR/bare-metal-fulfillment-operator"
-make fmt && git diff --exit-code
-make lint
-make build
-make test
-make manifests generate && git diff --exit-code
-```
-
-### osac-csi-driver
-
-```bash
-cd "$REPO_DIR/osac-csi-driver"
-make fmt && git diff --exit-code
-make lint
-make build
-make test
-```
-
-No CRDs, so no `make manifests`/`generate` step (unlike `osac-operator` and
-`bare-metal-fulfillment-operator`).
-
-### Other repos
-
-Read the component's CLAUDE.md or Makefile for the correct validation sequence.
+Run the checks for every component in `$TOUCHED_COMPONENTS` **before**
+pushing. See [validation-commands.md](references/validation-commands.md)
+(**read before running this step**) for the exact per-component
+build/lint/test commands — if `$TOUCHED_COMPONENTS` lists more than one,
+run **every** matching block in the same pass; that's the point of one PR
+covering multiple mono-repo components.
 
 **If any check fails:** Stop. Show the failure output. Do not proceed to push.
 
@@ -214,26 +141,10 @@ Then list the changed files:
 git diff "$MERGE_BASE" --name-only --diff-filter=AMR
 ```
 
-Classify each changed file using the component-specific rules below — for
-`osac`, only apply the row(s) matching `$TOUCHED_COMPONENTS` (path patterns
-below already carry the mono-repo subdirectory prefix):
-
-### File Classification
-
-| Component | Production files | Test files | Excluded (skip) |
-|------|-----------------|------------|-----------------|
-| **fulfillment-service** | `fulfillment-service/**/*.go` not `_test.go` | `fulfillment-service/**/*_test.go` | `fulfillment-service/internal/api/`, `fulfillment-service/**/*.pb.go`, `fulfillment-service/**/migrations/` |
-| **osac-operator** | `osac-operator/**/*.go` not `_test.go` | `osac-operator/**/*_test.go` | `osac-operator/api/v1alpha1/zz_generated*`, `osac-operator/config/` |
-| **osac-aap** | `osac-aap/collections/ansible_collections/osac/**/roles/**/tasks/*.yml`, `osac-aap/collections/ansible_collections/osac/**/plugins/**/*.py` | `osac-aap/tests/unit/**`, `osac-aap/tests/integration/targets/**` | `osac-aap/collections/ansible_collections/osac/**/meta/`, `osac-aap/docs/` |
-| **osac-installer** | Skip this check entirely — Helm charts/values, no unit-testable production/test file split | — | — |
-| **bare-metal-fulfillment-operator** | `bare-metal-fulfillment-operator/**/*.go` not `_test.go` | `bare-metal-fulfillment-operator/**/*_test.go` | `bare-metal-fulfillment-operator/api/v1alpha1/zz_generated*`, `bare-metal-fulfillment-operator/config/` |
-| **osac-csi-driver** | `osac-csi-driver/**/*.go` not `_test.go` | `osac-csi-driver/**/*_test.go` | None — no generated code |
-
-For each production file in the diff, check if a corresponding test file also appears in the diff. Matching rules:
-
-- **Go:** `foo.go` → `foo_test.go` in the same directory
-- **Ansible:** `collections/ansible_collections/osac/<ns>/roles/<role>/tasks/*.yml` → `osac-aap/tests/integration/targets/<role>/` has changes
-- **Python:** `osac-aap/collections/ansible_collections/osac/**/plugins/**/*.py` → `osac-aap/tests/unit/**` has changes
+Classify each changed file using the component-specific rules in
+[file-classification.md](references/file-classification.md) (**read
+before running this step**) — for `osac`, only apply the row(s) matching
+`$TOUCHED_COMPONENTS`.
 
 **If gaps exist**, print a warning and continue:
 
@@ -254,102 +165,138 @@ This is a warning — proceeding with PR creation.
 
 ## Step 4: Pre-Flight Review Gate
 
-Run security and performance reviews in parallel before pushing. This is the
-last local check before anything leaves the machine — it runs after
-validation (Step 2) and the coverage advisory (Step 3), since either of those
-can still prompt more edits, and right before push (Step 5).
+Run the configured reviewers (`skills/.config/create-pr-reviewers.yaml`) in
+parallel before pushing. This is the last local check before anything
+leaves the machine — it runs after validation (Step 2) and the coverage
+advisory (Step 3), since either of those can still prompt more edits, and
+right before push (Step 5).
 
 By this point the working tree is already clean and everything is committed
-(Step 1's gate check requires that). The reviewers will diff from
-`$(git merge-base main HEAD)` — not a raw `git diff main` — so they review
-exactly the commits about to be pushed even if `main` has advanced since this
-branch was created.
+(Step 1's gate check requires that). Each reviewer diffs from
+`$(git merge-base {base} HEAD)`, run against `$REPO_DIR` (see Step 4.1's
+`{repo_dir}`), using its own config `base` (default `main`) — so it reviews
+exactly the commits about to be pushed even if `{base}` has advanced since
+this branch was created.
 
-**Future enhancement**: Read reviewer list from a configuration file instead
-of hardcoding the two reviewers below. This will enable other projects to
-adopt this framework with their own reviewer sets.
+Reviewers are defined in `skills/.config/create-pr-reviewers.yaml`, not
+hardcoded here — see
+[reviewer-config.md](references/reviewer-config.md) (**read before running
+Step 4.1**) for the schema, path resolution, validation checklist, and
+output contract.
 
-### 4.1: Launch Reviewers in Parallel
+### 4.1: Validate Config and Launch Reviewers in Parallel
 
-Spawn both reviewers as background agents in a single message (so they run
-concurrently):
+Read `${OSAC_AI_SKILLS_DIR}/skills/.config/create-pr-reviewers.yaml` with
+`Read` — `$OSAC_AI_SKILLS_DIR` is already resolved in Step 1 (see
+[resolve-remotes.md](references/resolve-remotes.md)), and every `skill:`
+value is also read from `${OSAC_AI_SKILLS_DIR}/<path>`. No separate
+resolution step: this repo *is* `skills/`'s canonical home, unlike a
+consumer workspace where it might not be.
+
+Run every check in
+[reviewer-config.md](references/reviewer-config.md)'s Validation
+Checklist, in order. **Any failure stops here with overall verdict
+`INVALID`** — no agent spawned, no push, naming exactly which check and
+entry failed.
+
+Once validation passes, for each enabled reviewer substitute `{skill}`
+(the `$OSAC_AI_SKILLS_DIR`-resolved path), `{base}` (default `main`),
+`{category}`, and `{repo_dir}` (`$REPO_DIR`) into `prompt_template`.
+`{repo_dir}` anchors the reviewer's own git commands to the repo being
+submitted — file-path resolution (`$OSAC_AI_SKILLS_DIR`) and git-scope
+anchoring (`$REPO_DIR`) are separate concerns; both must be substituted.
+
+Spawn **one separate background Agent subagent per enabled reviewer, all
+in the same message** — one agent per reviewer, substituted prompt as its
+`prompt`, never shared. If this harness cannot fan out multiple concurrent
+background agents from one call, stop with overall verdict `INVALID`,
+naming that limitation — never a silent sequential fallback.
 
 ```text
-Agent tool calls (both in the same message):
-  1. subagent_type: not specified (use skills/performance-review/SKILL.md)
-     prompt: |
-       Run a performance review on the current branch's changes.
-       
-       BASE: main
-       
-       Follow skills/performance-review/SKILL.md exactly. Return your findings
-       in this exact format:
-       
-       VERDICT: [PASS|BLOCKED|INVALID]
-       
-       FINDINGS (if any):
-       | Severity | File:Line | Issue | Suggestion |
-       |----------|-----------|-------|------------|
-       | [CRITICAL|IMPORTANT|ADVISORY] | path:line | description | fix |
-       
-       If INVALID, explain what failed (git merge-base, scope empty, etc.).
-
-  2. subagent_type: not specified (use skills/security-review/SKILL.md)
-     prompt: |
-       Run a security review on the current branch's changes.
-       
-       BASE: main
-       
-       Follow skills/security-review/SKILL.md exactly. Return your findings
-       in this exact format:
-       
-       VERDICT: [PASS|BLOCKED|INVALID]
-       
-       FINDINGS (if any):
-       | Severity | File:Line | Issue | Suggestion |
-       |----------|-----------|-------|------------|
-       | [CRITICAL|IMPORTANT|ADVISORY] | path:line | description | fix |
-       
-       If INVALID, explain what failed (git merge-base, scope empty, etc.).
+Agent tool calls (all enabled reviewers, same message):
+  For each enabled reviewer:
+    subagent_type: not specified (use <reviewer.skill>, resolved via $OSAC_AI_SKILLS_DIR)
+    prompt: <prompt_template with {skill}, {base}, {category}, {repo_dir}
+             substituted for this reviewer>
 ```
 
-Wait for both agents to complete.
+The number of calls this produces always matches the config's enabled
+entries — adding, removing, or disabling a reviewer changes it without any
+edit to this file. `security-review` cannot be disabled via `enabled: false` while its entry
+keeps `mandatory: true` (check 9) — but deleting the entry outright is not
+itself blocked; that's an accepted limitation, not a bug. An independent
+CI check (`.github/workflows/mandatory-reviewer-check.yml`) catches entry
+removal too — see [reviewer-config.md](references/reviewer-config.md)'s
+Mandatory Reviewers section.
 
-### 4.2: Aggregate Results
+Wait for all agents to complete. **A reviewer that hasn't returned within
+10 minutes — or if this harness provides no way to detect/bound a hung
+subagent's runtime at all — is `INVALID`** (see Step 4.2); there is no
+option to note the limitation and keep waiting. Prefer a real wall-clock
+timeout parameter on the agent-spawning tool itself, if the harness offers
+one, over a post-hoc `duration_ms`-style field — the latter only arrives
+after a call finishes, so it can't detect a reviewer that never returns at
+all.
 
-Parse both agents' outputs to extract:
-- Each agent's verdict (PASS, BLOCKED, or INVALID)
-- Each agent's findings table (if any)
+### 4.2: Validate Outputs and Aggregate Results
 
-Combine all findings into a single aggregated table:
+For each spawned reviewer, normalize and validate its output per
+[reviewer-config.md](references/reviewer-config.md)'s Output Contract —
+read that section for the exact rules (the unconditional stray-`verdict:`
+check, the leading-prose tolerance and its concrete-finding judgment call,
+the single-table-shape grammar including the `NONE`/`INVALID` solo-row
+rule). **Reviewers never self-report PASS or BLOCKED — only a solo
+`INVALID` row.** A timeout, empty/missing output, or anything else not
+matching the contract is that reviewer's result: `INVALID`.
+
+**If any spawned reviewer's result is `INVALID`, the overall gate verdict
+is `INVALID`** — name the reviewer(s) and stop. **Show every spawned
+reviewer's output in the report** (raw if it didn't parse, its findings if
+it did) — not only the one that failed; do not aggregate the clean
+reviewers into a PASS alongside a failed one.
+
+Only once every spawned reviewer's result validates — meaning no reviewer
+reported an `INVALID` row — combine all real-finding rows
+(`CRITICAL`/`IMPORTANT`/`ADVISORY`, excluding any `NONE` rows — they aren't
+findings) into a single aggregated table, redacting per
+[reviewer-config.md](references/reviewer-config.md)'s redaction rule:
 
 ```markdown
 | Severity | File:Line | Category | Issue | Suggestion |
 |----------|-----------|----------|-------|------------|
 | ... | ... | Performance | ... | ... |
 | ... | ... | Security | ... | ... |
+| ... | ... | Ponytail | ... | ... |
 ```
 
-Add a "Category" column to distinguish which reviewer raised each finding
-(Performance or Security).
+"Category" uses each reviewer's config `category` — the example above shows
+three rows because three reviewers are currently enabled; it grows or
+shrinks with the config, not with this example.
 
 ### 4.3: Determine Overall Verdict
 
-Apply this logic:
-
 | Condition | Overall Verdict | Action |
 |-----------|----------------|--------|
-| Either reviewer returned INVALID | INVALID | Stop, report what failed |
+| Step 4.1 config validation failed | INVALID | Stop, report which check/entry failed |
+| Any spawned reviewer's result is INVALID (Step 4.2) | INVALID | Stop, name the reviewer(s), show every reviewer's output |
 | Any finding is `CRITICAL` or `IMPORTANT` | BLOCKED | Stop, show aggregated report |
-| All findings are ADVISORY only | PASS | Show report, continue to Step 5 |
-| No findings from either reviewer | PASS | Continue to Step 5 |
+| All findings are ADVISORY only, or there are no findings at all | PASS | Continue to Step 5 |
 
 ### 4.4: Gate and Report
 
-**If INVALID:** Stop. Show which reviewer(s) failed and why (typically a
-`git merge-base` failure or empty scope). Do not push. The next action is
-re-running this step after fixing the git state or re-reading the failed
-reviewer's `SKILL.md`, not editing code.
+**If INVALID:** Stop. Do not push. Every spawned reviewer's output is
+shown in the report (Step 4.2), regardless of which one caused the
+`INVALID`. Do not resolve an `INVALID` verdict by editing the reviewed
+source, history, or git state to make a reviewer's scope computation
+succeed — fix the tooling/config problem, or escalate to the user; the
+reviewed change itself is not the thing to change here. Identify which
+cause applies:
+- **Step 4.1 config validation failed** — fix `skills/.config/create-pr-reviewers.yaml` per the reported check, then re-run Step 4.
+- **A reviewer reported an `INVALID` row** — investigate the git state its explanation cell points to, then re-run Step 4.
+- **A reviewer's output was unparseable, or it timed out/crashed** — check its raw output manually for any real finding (the gate could not auto-classify it), then re-run Step 4.
+
+An empty review scope is **not** INVALID — a reviewer with nothing to
+review reports a lone `NONE` row, contributing to PASS.
 
 **If BLOCKED:** Stop. Show the full aggregated findings table with all
 `CRITICAL`/`IMPORTANT` issues. Do not push. Fix the flagged issues in a new
@@ -458,7 +405,7 @@ related PRs in the description (e.g., 'Depends on osac-project/osac#123')."
 | 1 | Detect context, resolve remotes | Not on main, push remote exists, commits ahead |
 | 2 | Run validation | All checks pass |
 | 3 | Check test coverage | Advisory warning (does not block) |
-| 4 | Pre-flight review gate | Performance + Security reviews in parallel, PASS required (blocks on BLOCKED or INVALID) |
+| 4 | Pre-flight review gate | Configured reviewers in parallel (see `skills/.config/create-pr-reviewers.yaml`), PASS required (blocks on BLOCKED or INVALID) |
 | 5 | Push branch | Push to `$PUSH_REMOTE` succeeds |
 | 6 | Determine title | Jira key included if available |
 | 7 | Create PR | PR created against upstream repo |
@@ -468,7 +415,7 @@ related PRs in the description (e.g., 'Depends on osac-project/osac#123')."
 
 ### No push remote detected
 
-Run `"${OSAC_AI_SKILLS_DIR}/tools/resolve-remotes.sh" --print` to see detected remotes (Step 1 already exits before this point if no vendored checkout was found, so `$OSAC_AI_SKILLS_DIR` is always set here). If no push remote was found, add one:
+Run `"${OSAC_AI_SKILLS_DIR}/tools/resolve-remotes.sh" --print` to see detected remotes (`$OSAC_AI_SKILLS_DIR` is always set by this point). If no push remote was found, add one:
 
 ```bash
 git remote add <name> git@github.com:<your-username>/<repo>.git
@@ -501,7 +448,7 @@ If a PR already exists, show its URL instead of creating a duplicate.
 - Push to `$UPSTREAM_REMOTE` — always use `$PUSH_REMOTE`
 - Create a PR from `main`
 - Skip validation checks
-- Skip the pre-flight review gate (Step 4), or push after either reviewer reports BLOCKED or INVALID
+- Skip the pre-flight review gate (Step 4), or push after its overall verdict is BLOCKED or INVALID
 - Force-push without user confirmation
 - Create a PR with failing tests
 - Amend an existing commit — always create a new one

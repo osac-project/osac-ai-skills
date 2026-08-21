@@ -1,0 +1,33 @@
+name: Mandatory Reviewer Check
+
+# No paths filter, deliberately (same reasoning skillsaw.yml documents for
+# itself): the check + a pip install take a few seconds in CI, so filtering
+# triggers isn't worth the risk of the filter list drifting out of sync
+# with what the check actually depends on. An earlier version of this file
+# filtered on just the config YAML, which meant a PR could edit
+# tools/check-mandatory-reviewers.sh, tools/check-mandatory-reviewers.py,
+# or this workflow file itself -- neutering the check -- without ever
+# triggering it to run.
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mandatory-reviewer-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check-mandatory-reviewers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip install --quiet --user pyyaml==6.0.2
+
+      - name: Check mandatory reviewers
+        run: bash tools/check-mandatory-reviewers.sh
