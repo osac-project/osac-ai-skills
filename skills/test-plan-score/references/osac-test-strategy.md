@@ -35,18 +35,16 @@ Test cross-component interactions with real infrastructure.
 | osac-operator | Ginkgo + envtest | `*_integration_test.go` | envtest (API server + etcd) | ~5 |
 
 **fulfillment-service IT infrastructure:**
-- Kind cluster named `fulfillment-service-it`
+- Kind cluster named `osac-dev`, created via
+  `make -C osac-installer install-infra PLATFORM=kind PROFILE=dev NS=osac`
 - PostgreSQL for data storage
 - Keycloak for authentication (JWT tokens)
 - Envoy Gateway for TLS + SNI routing
 - Requires `/etc/hosts` entries:
   - `127.0.0.1 keycloak.keycloak.svc.cluster.local`
   - `127.0.0.1 fulfillment-api.osac.svc.cluster.local`
-
-**IT environment variables:**
-- `IT_KEEP_KIND=true` — preserve kind cluster after tests
-- `IT_KEEP_SERVICE=true` — keep application deployment
-- `IT_DEPLOY_MODE=kustomize` — use kustomize instead of Helm
+  - `127.0.0.1 fulfillment-internal-api.osac.svc.cluster.local`
+- Clean up: `make -C osac-installer uninstall PLATFORM=kind PROFILE=dev NS=osac`
 
 **IT test patterns:**
 ```go
