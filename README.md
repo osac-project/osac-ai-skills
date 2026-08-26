@@ -21,6 +21,81 @@ here.
 For skill-authoring conventions, versioning rules, and how to contribute a
 skill, see [`AGENTS.md`](AGENTS.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## Recommended Skill Sequence
+
+Canonical Feature → PRD → Design → Jira sync → Implement → E2E ordering for
+OSAC agent skills. Consumer repos (`osac/`, and until cutover
+`osac-workspace/`) link here rather than maintaining their own copy.
+
+Run the consumer's bootstrap before a new session so skills are vendored and
+linked:
+
+- **osac (mono-repo):** `tools/bootstrap.sh` from the `osac/` checkout
+- **osac-workspace (until cutover):** `./bootstrap.sh` from the workspace root
+
+Do not run `osac/tools/bootstrap.sh` from an `osac/` nested inside
+`osac-workspace`. Skills are available in Claude Code, Cursor, and Gemini CLI
+after bootstrap (command syntax varies by tool).
+
+### 1. Create a Jira Feature
+
+`/osac-feature` — Describe what you want to build. Creates a Feature issue in
+Jira (OSAC project) that anchors everything downstream.
+
+### 2. Write a PRD
+
+`/prd` — Ingests requirements from the Jira Feature, walks through clarifying
+ambiguities, drafts a Product Requirements Document, and publishes as a PR to
+`enhancement-proposals`.
+
+Phases: `/prd:ingest` → `/prd:clarify` → `/prd:draft` → `/prd:revise` →
+`/prd:publish` → `/prd:respond`
+
+Get the PR reviewed and merged before moving on.
+
+### 3. Write a Design (Enhancement Proposal)
+
+`/design` — Takes the merged PRD, researches the problem space, drafts a
+technical design document (EP), decomposes work into epics and stories, and
+publishes as a PR to `enhancement-proposals`.
+
+Phases: `/design:ingest` → `/design:research` → `/design:draft` →
+`/design:decompose` → `/design:revise` → `/design:publish` → `/design:respond`
+
+Get the PR reviewed and merged.
+
+### 4. Create Jira Epics & Tasks
+
+`/design:sync` — Syncs the approved task breakdown from the design into Jira
+as epics and tasks under the Feature.
+
+### 5. Implement
+
+`/implement` — Pick up a Jira task, plan the implementation, write tests and
+code via TDD, validate, and publish a PR.
+
+Phases: `/implement:ingest` → `/implement:plan` → `/implement:code` →
+`/implement:validate` → `/implement:publish` → `/implement:respond`
+
+### 6. Write E2E Tests
+
+`/e2e` — Pick up a [QE] Jira task produced by the design workflow, discover
+the project's e2e testing infrastructure, plan test scenarios, write e2e tests
+matching project conventions, validate, and publish a PR.
+
+Phases: `/e2e:ingest` → `/e2e:plan` → `/e2e:code` → `/e2e:validate` →
+`/e2e:publish` → `/e2e:respond`
+
+### Other useful skills
+
+- `/bugfix` — Systematic bug investigation and fix (phase-based)
+- `/debug-e2e` — Debug a failing CI job using build logs and gathered OSAC artifacts
+- `/create-pr` — Runs repo-specific validation and creates a PR via the fork workflow
+- `/code-review` — Review your current diff before submitting
+
+Each skill is phase-based — you can jump directly to any phase (e.g.
+`/prd:draft`, `/implement:code`).
+
 ## Consumer fan-out
 
 From a standalone clone of this repo:
