@@ -64,11 +64,16 @@ if [ -z "${EPIC_KEY:-}" ]; then
   ERR=$(new_temp osac-jira-epic-err)
   add_temp "$ERR"
 
+  EPIC_LABEL_FLAGS="--label bootstrap"
+  if [ "$REQUIRES_UI" = "no" ]; then
+    EPIC_LABEL_FLAGS="$EPIC_LABEL_FLAGS --label no-ui"
+  fi
+
   jira issue create -t Epic --project OSAC \
     -s "${EPIC_SUMMARY}" \
     -b "Documentation work gates for ${KEY}. These tasks track drafting, submitting, and merging planning documents — not implementation." \
     --component "${COMPONENT}" \
-    --label bootstrap --no-input --raw >"$OUT" 2>"$ERR" </dev/null
+    $EPIC_LABEL_FLAGS --no-input --raw >"$OUT" 2>"$ERR" </dev/null
 
   EPIC_KEY=$(jq -r '.key // empty' "$OUT")
   require_osac_key "$EPIC_KEY" "epic" "$OUT" "$ERR"
@@ -147,7 +152,7 @@ Label + copied fix version (when not backlog) + copied team (when the epic
 doesn't already have one):
 
 ```bash
-apply_bootstrap_epic_metadata "$EPIC_KEY" "$KEY" "$BOOTSTRAP_FIX_VERSION" "$TEAM"
+apply_bootstrap_epic_metadata "$EPIC_KEY" "$KEY" "$BOOTSTRAP_FIX_VERSION" "$TEAM" "$REQUIRES_UI"
 ```
 
 Run after parent verify succeeds — including when reusing an epic from duplicate search.

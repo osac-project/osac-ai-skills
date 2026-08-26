@@ -2,7 +2,7 @@
 name: osac-feature
 description: Create Feature issues in the OSAC Jira project. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 # OSAC Feature Creation
@@ -44,7 +44,7 @@ epic is created as a *child* of the Feature to track documentation gates.
 | Issue type | fixVersion | Labels | Notes |
 |------------|------------|--------|-------|
 | Feature | Yes (confirm gate; source of truth) | (optional) `osac-ux`, `osac-ui`, `customer`, … | User chooses version or backlog |
-| Bootstrap epic | Copied from Feature when set | `bootstrap` | Never independently chosen |
+| Bootstrap epic | Copied from Feature when set | `bootstrap`; also `no-ui` when `REQUIRES_UI=no` | Never independently chosen |
 | Gate tasks | No | `osac-ux` / `osac-ui` on UX/UI tasks only | PRD and Design have no labels |
 
 The Feature is the single source of truth for `/milestone-scope` reporting.
@@ -171,7 +171,7 @@ Ready to create in Jira:
   Assignee:    <name or unassigned>
 
   Bootstrap epic:  <FEATURE_SUMMARY> - Bootstrap
-    Label: bootstrap; fix version copied from Feature (when not backlog); team copied from Feature
+    Labels: bootstrap[, no-ui if no UI work]; fix version copied from Feature (when not backlog); team copied from Feature
   Bootstrap tasks: PRD - <FEATURE_SUMMARY>, Design - <FEATURE_SUMMARY>
     [, UX Design - <FEATURE_SUMMARY>, UI Design - <FEATURE_SUMMARY> if UI work]
 
@@ -232,7 +232,7 @@ Team:           <team>
 Fix version:    <version> | backlog (unset)
 Labels:         [osac-ux, osac-ui if UI work][, customer, customer:<name>] | none
 Bootstrap epic: https://redhat.atlassian.net/browse/<EPIC_KEY>
-Bootstrap label: bootstrap
+Bootstrap labels: bootstrap[, no-ui if no UI work]
 Epic fix version: <copied from Feature | not set (backlog)>
 Epic team:      <copied from Feature | already set (unchanged)>
 Bootstrap tasks:
@@ -267,7 +267,7 @@ See [feature-body-template.md](references/feature-body-template.md) for the Jira
 - When `REQUIRES_UI=yes`: Feature gets `osac-ux` and `osac-ui`; both UX Design
   and UI Design tasks are created (`REQUIRES_UI` gates the full UX → UI track)
 - UX Design task gets `osac-ux`; UI Design task gets `osac-ui`; PRD and Design
-  have no labels; bootstrap epic gets `bootstrap` only
+  have no labels; bootstrap epic gets `bootstrap` (and `no-ui` when `REQUIRES_UI=no`)
 - Jira hierarchy: Feature → Bootstrap epic → gate tasks (PRD, Design, [UX Design, UI Design])
 - Gate task summaries include the Feature title (`<gate> - ${FEATURE_SUMMARY}`,
   e.g. `PRD - <FEATURE_SUMMARY>`) so they're identifiable outside the epic/Feature —

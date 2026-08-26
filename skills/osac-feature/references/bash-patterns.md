@@ -291,12 +291,13 @@ EOF
 # only when the epic has none. Caller passes "backlog" for fix_version when
 # the Feature edit did not succeed, so a failed Feature update never results
 # in a copied version on the epic. Team has no such sentinel (always passed).
+# requires_ui ("yes"/"no") gates the no-ui label — "no" adds it.
 #
 # The epic's raw JSON is read once and used for both the fixVersion and Team
 # checks below — fix_version's "backlog" case must not skip the Team copy,
 # so the two checks run independently rather than one short-circuiting both.
 apply_bootstrap_epic_metadata() {
-  local epic_key=$1 feature_key=$2 fix_version=$3 team_name=$4
+  local epic_key=$1 feature_key=$2 fix_version=$3 team_name=$4 requires_ui=${5:-yes}
   local err
   err=$(new_temp osac-jira-bootstrap-meta-err)
   add_temp "$err"
@@ -305,6 +306,14 @@ apply_bootstrap_epic_metadata() {
     echo "Bootstrap label edit failed for ${epic_key} — set manually:" >&2
     echo "  jira issue edit ${epic_key} -l bootstrap --no-input </dev/null" >&2
     cat "$err" >&2
+  fi
+
+  if [ "$requires_ui" = "no" ]; then
+    if ! jira issue edit "$epic_key" -l no-ui --no-input 2>>"$err" </dev/null; then
+      echo "no-ui label edit failed for ${epic_key} — set manually:" >&2
+      echo "  jira issue edit ${epic_key} -l no-ui --no-input </dev/null" >&2
+      cat "$err" >&2
+    fi
   fi
 
   local raw
