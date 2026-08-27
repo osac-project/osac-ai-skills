@@ -41,7 +41,8 @@ Full schema and rules for the `.json` output of the `release-plan` skill (see [.
       "key": "caas",
       "title": "CaaS — Cluster Provisioning",
       "items": [
-        { "jira": "OSAC-1415", "title": "Support cluster upgrade", "customers": ["Moc", "Telenor"] }
+        { "jira": "OSAC-1191", "title": "Cluster provisioning via HyperShift + Metal3 + BCM inventory", "version": "0.1", "isTarget": false, "customers": [] },
+        { "jira": "OSAC-1415", "title": "Support cluster upgrade", "version": "+<TARGET>", "isTarget": true, "customers": ["Moc", "Telenor"] }
       ]
     }
   ],
@@ -93,6 +94,7 @@ Full schema and rules for the `.json` output of the `release-plan` skill (see [.
 
 Mirror the HTML rules from `SKILL.md` Sections 1–7:
 
+- `useCaseCards[].items` are cumulative across all versions, not just the target: each item carries `version` (`"0.1"`, `"0.2"`, …, or `"+<TARGET>"`) and `isTarget` (`true` only for the target version's additions). Omit versions that added nothing to a use case — same rule as `cumulativeProgression`. Same use-case grouping and no-standalone-UI-card rule as the HTML (Section 3).
 - `serviceMatrix.rows[].cells` uses a `—` sentinel string (not an empty array) for a service/dimension with no history in any version, so consumers can distinguish "no data" from "not yet fetched".
 - `cumulativeProgression[].versions` omits entries for versions that added nothing to that use case — the same rule as the markdown/HTML tables (Section 5).
 - `featureInventory` never includes a standalone "UI" group; spikes get their own `"Spikes (Investigations)"` group and are excluded from `serviceMatrix` and `cumulativeProgression`.
