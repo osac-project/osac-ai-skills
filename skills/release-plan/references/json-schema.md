@@ -95,7 +95,7 @@ Full schema and rules for the `.json` output of the `release-plan` skill (see [.
 Mirror the HTML rules from `SKILL.md` Sections 1–7:
 
 - `useCaseCards[].items` are cumulative across all versions, not just the target: each item carries `version` (`"0.1"`, `"0.2"`, …, or `"+<TARGET>"`) and `isTarget` (`true` only for the target version's additions). Omit versions that added nothing to a use case — same rule as `cumulativeProgression`. Same use-case grouping and no-standalone-UI-card rule as the HTML (Section 3).
-- `serviceMatrix.rows[].cells` uses a `—` sentinel string (not an empty array) for a service/dimension with no history in any version, so consumers can distinguish "no data" from "not yet fetched".
+- `serviceMatrix.rows[].cells` uses a `—` sentinel string (not an empty array) for a service/dimension with **no history in any version**. When a cell *does* have history, its array must only contain entries for versions that actually added a capability — never include an entry whose `text` is a placeholder/dash for a version that added nothing; omit that version's entry entirely instead.
 - `cumulativeProgression[].versions` omits entries for versions that added nothing to that use case — the same rule as the markdown/HTML tables (Section 5).
 - `featureInventory` never includes a standalone "UI" group; spikes get their own `"Spikes (Investigations)"` group and are excluded from `serviceMatrix` and `cumulativeProgression`.
 - `status` values are the actual Jira status, mapped the same way as the HTML/markdown tables: `"Done ✅"` / `"Closed ✅"` for Closed+Done, `"In Progress"`, `"In Review"`, `"Planned"` for New/not-started. Map every row from its real Jira status individually — do not reuse one status value across rows.

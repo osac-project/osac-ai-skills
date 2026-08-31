@@ -2,7 +2,7 @@
 name: release-plan
 description: "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap."
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Release Plan
