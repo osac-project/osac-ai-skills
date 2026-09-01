@@ -19,17 +19,23 @@ for skill_md in skills/*/SKILL.md; do
 done
 ((${#skill_names[@]} > 0)) || fail "no skills/*/SKILL.md found"
 
-# Remove any leftover docs/ so `make docs` cannot succeed as
-# "Nothing to be done" for a directory named docs without a recipe.
+# Remove docs/ so the run proves the generator recreates every file
+# rather than leaving stale output in place.
+restore_docs() {
+  git checkout -- docs/ 2>/dev/null || true
+}
+trap restore_docs EXIT
 rm -rf docs/
 
 make docs || fail "make docs failed"
+trap - EXIT
 
 [[ -f docs/index.html ]] || fail "docs/index.html missing after make docs"
 rg -q -i '<html' docs/index.html || fail "docs/index.html is not HTML"
 
 for name in "${skill_names[@]}"; do
-  rg -q -F "$name" docs/index.html || fail "docs/index.html missing skill ${name}"
+  rg -q -F "\"name\": \"${name}\"" docs/index.html \
+    || fail "docs/index.html missing skill ${name}"
 done
 pass "catalog lists ${#skill_names[@]} skills"
 
