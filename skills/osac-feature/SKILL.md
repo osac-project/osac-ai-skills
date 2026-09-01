@@ -1,8 +1,8 @@
 ---
 name: osac-feature
-description: Create Feature issues in the OSAC Jira project. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.
+description: Create Feature issues in the OSAC Jira project, or complete empty placeholder Features. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.
 metadata:
-  version: "0.2.4"
+  version: "0.3.0"
 ---
 
 # OSAC Feature Creation
@@ -18,22 +18,27 @@ portable constructs only — macOS `/bin/bash` is 3.2 (no `mapfile`).
 - User asks to create a Feature, enhancement, or new capability request for OSAC
 - User wants to track a new feature idea in Jira
 - User provides feature requirements that should be formalized as a Jira issue
+- User supplies an existing Feature key (or a same-summary Feature is found) that is an empty placeholder to complete
 
 ## Gather Inputs
 
 Collect from conversation context. Ask only if truly ambiguous — **except**
-for **Team**, **Requires UI work**, and **Fix version**, which must always
-be asked explicitly (never inferred from the description or summary).
+for **Requires UI work**, which must always be asked (always ask the UI-work
+question; it is never stored on the Feature). **Team** and **Fix version**
+must be asked explicitly on create. On takeover of an empty placeholder,
+read Component / Team / Fix version from the existing Feature and prompt
+only for fields the Feature lacks.
 
 | Input | Required | Default |
 |-------|----------|---------|
-| Feature summary | Yes | From conversation context |
-| Description | Yes | From conversation context |
-| Component | Yes | Infer from context: VMaaS, CaaS, BMaaS, Core, Storage, Connectivity&Fabric, UI, Infrastructure, Enclave |
-| Team | **Yes** | Ask user to pick from the known OSAC teams — see [bash-patterns.md](references/bash-patterns.md)'s `list_team_suggestions` |
+| Existing Feature key | No | User-supplied `OSAC-NNNN`; take over if empty placeholder |
+| Feature summary | Yes | From conversation context, or from the existing Feature when a key is supplied |
+| Description | Yes | From conversation context (written as the standard Feature body) |
+| Component | Yes | Infer from context, or from the existing Feature when set: VMaaS, CaaS, BMaaS, Core, Storage, Connectivity&Fabric, UI, Infrastructure, Enclave |
+| Team | **Yes** | Ask unless takeover and the Feature already has Team — see [bash-patterns.md](references/bash-patterns.md)'s `list_team_suggestions` |
 | Customer | No | If the feature is driven by a specific customer requirement, note the customer name |
-| Requires UI work | **Yes** | Ask: "Does this feature require UI work?" |
-| Fix version | **Yes** | Propose highest unreleased milestone from Jira (exclude `0.0`); user accepts, picks another, or chooses backlog |
+| Requires UI work | **Yes** | Always ask: "Does this feature require UI work?" |
+| Fix version | **Yes** | Ask unless takeover and the Feature already has a fix version. Propose highest unreleased milestone from Jira (exclude `0.0`); user accepts, picks another, or chooses backlog |
 | Assignee | No | Unassigned — only assign if user specifies |
 
 **Note:** Features are never *children* of epics. After creation, a bootstrap
@@ -81,6 +86,16 @@ single safe line (hyphens, colons, and commas are fine).
 
 Store the validated value in `FEATURE_SUMMARY`.
 
+### Existing Feature key (optional)
+
+If the user supplies an `OSAC-NNNN` key, treat it as the takeover target:
+
+1. `jira issue view "${KEY}" --raw`. Stop if the view fails or the type is not Feature.
+2. Load `FEATURE_SUMMARY` from `.fields.summary` (do not rename the Feature).
+3. Run `assert_empty_placeholder "$KEY"` (see [bash-patterns.md](references/bash-patterns.md)). If it fails, stop and warn — never overwrite a Feature that has a real description or any children.
+4. `read_feature_fields "$KEY"`. Reuse Component / Team / Fix version when set; prompt only for fields the Feature lacks.
+5. Always ask the UI-work question.
+
 ### Component
 
 Infer from conversation context. Valid values: VMaaS, CaaS, BMaaS, Core,
@@ -89,7 +104,8 @@ Store in `COMPONENT`.
 
 ### Team
 
-Ask explicitly — do not infer from the description or summary.
+On create, ask explicitly — do not infer from the description or summary.
+On takeover, skip this prompt when `FEATURE_TEAM` is already set.
 
 1. Run `list_team_suggestions` (see [bash-patterns.md](references/bash-patterns.md)) to list known teams.
 2. Ask: "Which team owns this Feature? Options: <team list>"
@@ -126,7 +142,8 @@ If ambiguous, ask again — do not infer from the description.
 
 ### Fix version
 
-Ask explicitly — do not infer from summary text (e.g. `(0.2)` in the title).
+On create, ask explicitly — do not infer from summary text (e.g. `(0.2)` in the title).
+On takeover, skip this prompt when `FEATURE_FIX_VERSION` is already set; store it in `FIX_VERSION`.
 
 1. Run `list_fix_version_suggestions` (see [bash-patterns.md](references/bash-patterns.md)) to fetch
    unreleased OSAC milestones, excluding `0.0` and the literal `Backlog`
@@ -154,9 +171,11 @@ On assign failure, capture stderr, report the error, and continue bootstrap
 
 ## Confirm Before Creating
 
-**Do not call `jira issue create` until the user confirms.**
+**Do not call `jira issue create` or takeover `jira issue edit` until the user confirms.**
 
-Present a summary and wait for explicit approval:
+Present a summary and wait for explicit approval. If completing an existing
+empty placeholder, say "Ready to complete existing Feature \<KEY\>" instead of
+"Ready to create":
 
 ```text
 Ready to create in Jira:
@@ -190,7 +209,7 @@ Execute in order. **Read each reference file before its step** — do not skip.
 | Step | Read first | Action |
 |------|------------|--------|
 | 1 | [bash-patterns.md](references/bash-patterns.md) | Source helpers and safe-create temps |
-| 2 | [feature-body-template.md](references/feature-body-template.md) | Create Feature, set fix version and team, assign if requested |
+| 2 | [feature-body-template.md](references/feature-body-template.md) | Create Feature, or take over an empty placeholder; set missing fix version and team; assign if requested |
 | 3 | [bootstrap-epic.md](references/bootstrap-epic.md) | Create or reuse bootstrap epic; verify parent linkage |
 | 4 | [bootstrap-tasks.md](references/bootstrap-tasks.md) | Create PRD, Design[, UX/UI Design] gate tasks; apply team |
 
@@ -199,8 +218,10 @@ Execute in order. **Read each reference file before its step** — do not skip.
 | Failure | Action |
 |---------|--------|
 | Invalid summary (JQL/shell unsafe chars, >243 chars) | Reject before confirm; ask user to revise |
-| User declines confirm gate | Stop; no Jira creates |
-| Duplicate Feature found | Stop; report existing key(s); ask user whether to reuse or proceed anyway |
+| User declines confirm gate | Stop; no Jira creates or edits |
+| Empty placeholder Feature (user-supplied key or same-summary) | Take over: fill the standard body; run bootstrap against the existing key |
+| Non-empty Feature (real description or any children) | Stop; report the key; never overwrite |
+| User-supplied key is not a Feature | Stop; report the issue type |
 | Empty `KEY` after Feature create | Stop; report `$ERR` and error JSON; do not bootstrap |
 | Fix version edit failed after Feature create | Non-fatal; report manual `jira issue edit --fix-version …`; continue bootstrap |
 | Team field edit failed after Feature/epic/task create | Non-fatal; report manual Jira UI edit; continue bootstrap |
@@ -216,8 +237,9 @@ Execute in order. **Read each reference file before its step** — do not skip.
 
 Before create, search Jira for an existing Feature with the same summary —
 see [feature-body-template.md](references/feature-body-template.md)'s
-Duplicate check. If a slow create appears hung, wait for it to finish — do
-not kill and retry.
+Duplicate check. An empty placeholder is taken over (body filled, no second
+Feature). A non-empty Feature stops the workflow — never overwrite. If a
+slow create appears hung, wait for it to finish — do not kill and retry.
 
 ## Report
 
@@ -275,11 +297,14 @@ See [feature-body-template.md](references/feature-body-template.md) for the Jira
 - Bootstrap epic: create without `-P`, then `jira issue edit -P` — Epic create with `-P` on a Feature parent returns HTTP 400; use `</dev/null` on all jira create/edit to avoid stdin hangs (jira-cli#948)
 - If a Feature/epic/task create or edit is blocked by Cursor Auto-review, gated by a Claude Code permission prompt, or hangs silently, retry the **same** command per [jira-task-management](../jira-task-management/SKILL.md)'s "Approval blocks vs. stdin hangs on create/edit" — do **not** drop `--template`/`-b`/`--no-input`/`</dev/null` or invent a skip-description path, which creates empty Features
 - Gate tasks track documentation milestones, not implementation work
-- **Fix version:** Feature chooses at confirm gate; bootstrap epic copies when set;
-  gate tasks never receive `fixVersion`
+- **Fix version:** Feature chooses at confirm gate on create, or is reused from
+  the Feature on takeover; bootstrap epic copies when set; gate tasks never
+  receive `fixVersion`
 - **Team:** not writable via jira-cli (`customfield_10001`; see `apply_team()`
   in [bash-patterns.md](references/bash-patterns.md)) — set with a direct REST
-  call instead. Feature chooses at confirm gate; bootstrap epic and PRD/Design
+  call instead. Feature chooses at confirm gate on create, or is reused from
+  the Feature on takeover; bootstrap epic Component and Team come from the
+  Feature (in-memory values only when the Feature field is empty); PRD/Design
   gate tasks receive a copy; UX Design and UI Design gate tasks always get
   `OSAC-UI` regardless of the Feature's team
 - Existing bootstrap epics predating this convention are not backfilled — only

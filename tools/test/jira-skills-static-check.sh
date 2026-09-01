@@ -120,7 +120,7 @@ test_osac_feature_takeover_and_derive() {
   done
   pass "osac-feature: placeholder and Feature-field helpers"
 
-  rg -q -- '--component "${BOOTSTRAP_COMPONENT}"' "$epic" \
+  rg -qF -- '--component "${BOOTSTRAP_COMPONENT}"' "$epic" \
     || fail 'bootstrap-epic.md epic create must use --component "${BOOTSTRAP_COMPONENT}"'
   pass "osac-feature: epic create uses BOOTSTRAP_COMPONENT"
 
