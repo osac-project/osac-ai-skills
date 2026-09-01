@@ -90,9 +90,9 @@ the full list and which skills consume each one.
 ## Skill-Quality Linting (skillsaw)
 
 [`skillsaw`](https://skillsaw.org/) lints the **entire repository**
-(`skillsaw lint .`, per `.skillsaw.yaml`'s exclude list, which only removes
-agent-discovery symlink dirs and `.artifacts/` — root-level files including
-this one are in scope). Rule configuration lives in `.skillsaw.yaml`;
+(`skillsaw lint .`, per `.skillsaw.yaml`'s exclude list, which removes
+agent-discovery symlink dirs, `.artifacts/`, and generated `docs/` —
+root-level files including this one are in scope). Rule configuration lives in `.skillsaw.yaml`;
 [`.github/workflows/skillsaw.yml`](.github/workflows/skillsaw.yml) runs it
 on every PR with `strict: true` (every warning fails the check), pinned to
 the version in `Makefile`'s `SKILLSAW_VERSION`.
