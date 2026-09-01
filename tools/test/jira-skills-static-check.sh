@@ -81,11 +81,60 @@ test_osac_feature_no_duplicate_helpers() {
   pass "osac-feature: no duplicate temp helpers"
 }
 
+test_osac_feature_takeover_and_derive() {
+  local skill="${ROOT}/skills/osac-feature"
+  local skill_md="${skill}/SKILL.md"
+  local body="${skill}/references/feature-body-template.md"
+  local bash="${skill}/references/bash-patterns.md"
+  local epic="${skill}/references/bootstrap-epic.md"
+
+  rg -q 'version: "0.3.0"' "$skill_md" \
+    || fail "osac-feature: SKILL.md metadata.version must be 0.3.0"
+  pass "osac-feature: version 0.3.0"
+
+  rg -qi 'empty placeholder' "$skill_md" \
+    || fail "osac-feature: SKILL.md must document takeover of empty placeholders"
+  rg -qi 'never overwrite' "$skill_md" \
+    || fail "osac-feature: SKILL.md must document never overwrite of non-empty Features"
+  if rg -qi 'proceed anyway' "$skill_md" "$body"; then
+    fail "osac-feature: must not tell agents to create a second Feature (proceed anyway)"
+  fi
+  pass "osac-feature: takeover / never overwrite"
+
+  rg -qi 'always ask the UI-work question' "$skill_md" \
+    || fail "osac-feature: SKILL.md must state UI work is always asked (including takeover)"
+  pass "osac-feature: UI work always asked"
+
+  rg -qi 'existing Feature key' "$skill_md" \
+    || fail "osac-feature: SKILL.md Gather Inputs must accept an optional existing Feature key"
+  pass "osac-feature: optional existing Feature key"
+
+  rg -q 'assert_empty_placeholder' "$body" \
+    || fail "feature-body-template.md must call assert_empty_placeholder on duplicate/user-supplied key"
+  pass "osac-feature: duplicate check calls assert_empty_placeholder"
+
+  local fn
+  for fn in is_placeholder_description assert_empty_placeholder read_feature_fields; do
+    rg -q "${fn}()" "$bash" \
+      || fail "bash-patterns.md missing ${fn}()"
+  done
+  pass "osac-feature: placeholder and Feature-field helpers"
+
+  rg -q -- '--component "${BOOTSTRAP_COMPONENT}"' "$epic" \
+    || fail 'bootstrap-epic.md epic create must use --component "${BOOTSTRAP_COMPONENT}"'
+  pass "osac-feature: epic create uses BOOTSTRAP_COMPONENT"
+
+  rg -q 'read_feature_fields "$feature_key"' "$bash" \
+    || fail "apply_bootstrap_epic_metadata must call read_feature_fields \"\$feature_key\" (Feature team, not only \$team_name)"
+  pass "osac-feature: apply_bootstrap_epic_metadata reads Feature team"
+}
+
 test_skills_reference_shared_script
 test_jira_safe_create_lookup_not_duplicated
 test_no_fixed_tmp_paths
 test_no_inline_create_in_examples
 test_osac_feature_no_duplicate_helpers
+test_osac_feature_takeover_and_derive
 
 echo ""
 echo "All jira skill static checks passed."
