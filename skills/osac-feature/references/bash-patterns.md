@@ -132,7 +132,7 @@ count_feature_children() {
 
 # 0 only when description is a placeholder AND the Feature has no children. Does not edit.
 assert_empty_placeholder() {
-  local key=$1 view err desc
+  local key=$1 view err desc itype
   view=$(new_temp osac-jira-placeholder-view)
   add_temp "$view"
   err=$(new_temp osac-jira-placeholder-err)
@@ -144,6 +144,11 @@ assert_empty_placeholder() {
   fi
   if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
     echo "Could not parse ${key} JSON for placeholder check — stopping" >&2
+    return 1
+  fi
+  itype=$(jq -r '.fields.issuetype.name // empty' <"$view")
+  if [ "$itype" != "Feature" ]; then
+    echo "${key} is type '${itype:-unknown}', not Feature — not overwriting" >&2
     return 1
   fi
   desc=$(feature_description_text <"$view")
@@ -162,10 +167,7 @@ assert_empty_placeholder() {
 }
 
 read_feature_fields() {
-  local key=$1 view err
-  FEATURE_COMPONENT=""
-  FEATURE_TEAM=""
-  FEATURE_FIX_VERSION=""
+  local key=$1 view err component team version
   view=$(new_temp osac-jira-feature-fields)
   add_temp "$view"
   err=$(new_temp osac-jira-feature-fields-err)
@@ -179,9 +181,12 @@ read_feature_fields() {
     echo "Could not parse ${key} JSON for Component/Team/Fix version" >&2
     return 1
   fi
-  FEATURE_COMPONENT=$(jq -r '.fields.components[0].name // empty' <"$view")
-  FEATURE_TEAM=$(jq -r '.fields.customfield_10001.name // empty' <"$view")
-  FEATURE_FIX_VERSION=$(jq -r '.fields.fixVersions[0].name // empty' <"$view")
+  component=$(jq -r '.fields.components[0].name // empty' <"$view")
+  team=$(jq -r '.fields.customfield_10001.name // empty' <"$view")
+  version=$(jq -r '.fields.fixVersions[0].name // empty' <"$view")
+  FEATURE_COMPONENT=$component
+  FEATURE_TEAM=$team
+  FEATURE_FIX_VERSION=$version
 }
 ```
 

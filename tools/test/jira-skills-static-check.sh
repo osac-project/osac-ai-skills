@@ -127,6 +127,17 @@ test_osac_feature_takeover_and_derive() {
   rg -qF 'read_feature_fields "$feature_key"' "$bash" \
     || fail "apply_bootstrap_epic_metadata must call read_feature_fields \"\$feature_key\" (Feature team, not only \$team_name)"
   pass "osac-feature: apply_bootstrap_epic_metadata reads Feature team"
+
+  if rg -n 'jira issue edit' "$body" | rg -q -- '--template'; then
+    fail "feature-body-template.md must not use --template on jira issue edit (create-only flag)"
+  fi
+  rg -qF -- '-b "$(cat "$BODY")"' "$body" \
+    || fail "feature-body-template.md takeover must write the body with jira issue edit -b"
+  pass "osac-feature: takeover body uses issue edit -b"
+
+  rg -qi 'before.*confirm' "$skill_md" \
+    || fail "SKILL.md must run same-summary duplicate check before the confirm gate"
+  pass "osac-feature: same-summary duplicate check before confirm"
 }
 
 test_skills_reference_shared_script

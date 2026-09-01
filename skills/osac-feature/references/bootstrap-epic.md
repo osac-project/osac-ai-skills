@@ -13,9 +13,14 @@ empty. Then create a bootstrap epic under the Feature. Use
 (that subcommand has no parent flag).
 
 ```bash
-read_feature_fields "$KEY" || true
-BOOTSTRAP_COMPONENT="${FEATURE_COMPONENT:-${COMPONENT:-}}"
-BOOTSTRAP_TEAM="${FEATURE_TEAM:-${TEAM:-}}"
+if read_feature_fields "$KEY"; then
+  BOOTSTRAP_COMPONENT="${FEATURE_COMPONENT:-${COMPONENT:-}}"
+  BOOTSTRAP_TEAM="${FEATURE_TEAM:-${TEAM:-}}"
+else
+  echo "Could not read ${KEY} for epic Component/Team — using in-memory values" >&2
+  BOOTSTRAP_COMPONENT="${COMPONENT:-}"
+  BOOTSTRAP_TEAM="${TEAM:-}"
+fi
 TEAM="$BOOTSTRAP_TEAM"
 ```
 

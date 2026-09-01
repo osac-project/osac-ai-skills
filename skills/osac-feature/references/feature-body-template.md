@@ -1,7 +1,9 @@
 # Feature body template and create
 
 **Read this file when creating the Feature issue, or taking over an empty
-placeholder** (after user confirms the gate).
+placeholder.** Run the Duplicate check **before** the confirm gate when `KEY`
+is unset (same-summary). After confirm, skip the JQL search if `KEY` is
+already set and go straight to writing `$BODY`.
 
 The User Stories section must include a subsection for each OSAC persona
 defined in `osac-docs/personas.md` (canonical source:
@@ -103,7 +105,8 @@ FEATURE_LABELS=()
 [ -n "${CUSTOMER:-}" ] && FEATURE_LABELS+=(--label customer --label "customer:${CUSTOMER}")
 
 if [ "$TAKEOVER" -eq 1 ]; then
-  if ! jira issue edit "$KEY" --template "$BODY" --no-input 2>"$ERR" </dev/null; then
+  # issue edit has no --template (create-only); -b plus </dev/null avoids a stdin hang.
+  if ! jira issue edit "$KEY" -b "$(cat "$BODY")" --no-input 2>"$ERR" </dev/null; then
     echo "Feature body edit failed for ${KEY} — stopping" >&2
     cat "$ERR" >&2
     exit 1
@@ -114,23 +117,27 @@ if [ "$TAKEOVER" -eq 1 ]; then
       cat "$ERR" >&2
     fi
   fi
-  read_feature_fields "$KEY" || true
-  if [ -z "${FEATURE_COMPONENT:-}" ]; then
-    if ! jira issue edit "$KEY" --component "${COMPONENT}" --no-input 2>>"$ERR" </dev/null; then
-      echo "Feature component edit failed for ${KEY} — continuing bootstrap" >&2
-      cat "$ERR" >&2
+  if read_feature_fields "$KEY"; then
+    if [ -z "${FEATURE_COMPONENT:-}" ]; then
+      if ! jira issue edit "$KEY" --component "${COMPONENT}" --no-input 2>>"$ERR" </dev/null; then
+        echo "Feature component edit failed for ${KEY} — continuing bootstrap" >&2
+        cat "$ERR" >&2
+      fi
     fi
-  fi
-  if [ -n "${FEATURE_FIX_VERSION:-}" ]; then
-    BOOTSTRAP_FIX_VERSION="$FEATURE_FIX_VERSION"
-  elif apply_feature_fix_version "$KEY" "$FIX_VERSION"; then
-    BOOTSTRAP_FIX_VERSION="$FIX_VERSION"
+    if [ -n "${FEATURE_FIX_VERSION:-}" ]; then
+      BOOTSTRAP_FIX_VERSION="$FEATURE_FIX_VERSION"
+    elif apply_feature_fix_version "$KEY" "$FIX_VERSION"; then
+      BOOTSTRAP_FIX_VERSION="$FIX_VERSION"
+    else
+      echo "Feature fix version not applied — bootstrap epic will not receive a copy; set both manually" >&2
+      BOOTSTRAP_FIX_VERSION="backlog"
+    fi
+    if [ -z "${FEATURE_TEAM:-}" ]; then
+      apply_team "$KEY" "$TEAM"
+    fi
   else
-    echo "Feature fix version not applied — bootstrap epic will not receive a copy; set both manually" >&2
-    BOOTSTRAP_FIX_VERSION="backlog"
-  fi
-  if [ -z "${FEATURE_TEAM:-}" ]; then
-    apply_team "$KEY" "$TEAM"
+    echo "Could not re-read ${KEY} after body edit — skipping Component/Team/Fix version writes" >&2
+    BOOTSTRAP_FIX_VERSION="${FIX_VERSION:-backlog}"
   fi
 else
   jira issue create -t Feature --project OSAC \
