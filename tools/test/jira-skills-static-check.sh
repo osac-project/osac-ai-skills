@@ -88,9 +88,9 @@ test_osac_feature_takeover_and_derive() {
   local bash="${skill}/references/bash-patterns.md"
   local epic="${skill}/references/bootstrap-epic.md"
 
-  rg -q 'version: "0.3.1"' "$skill_md" \
-    || fail "osac-feature: SKILL.md metadata.version must be 0.3.1"
-  pass "osac-feature: version 0.3.1"
+  rg -q 'version: "0.3.0"' "$skill_md" \
+    || fail "osac-feature: SKILL.md metadata.version must be 0.3.0"
+  pass "osac-feature: version 0.3.0"
 
   rg -qi 'empty placeholder' "$skill_md" \
     || fail "osac-feature: SKILL.md must document takeover of empty placeholders"
