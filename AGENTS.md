@@ -44,10 +44,11 @@ metadata:
   directly or transitively (`agentskill-unreferenced-files`) — an orphaned
   file in a skill directory is a lint warning.
 
-As of this writing, `skills/` holds 21 skills (e.g. `jira-task-management`,
-`osac-feature`, `design-review`, `create-pr`) — treat that as an example of
-current shape, not an exhaustive or maintained list; read `skills/` itself
-for the current set.
+As of this writing, `skills/` holds OSAC-native skills (e.g.
+`jira-task-management`, `osac-feature`, `design-review`, `create-pr`).
+The maintained human-facing index is the published catalog:
+[https://osac-project.github.io/osac-ai-skills/](https://osac-project.github.io/osac-ai-skills/).
+Read `skills/` itself for the current set in this checkout.
 
 ### Path References in Skill Content
 
@@ -89,9 +90,9 @@ the full list and which skills consume each one.
 ## Skill-Quality Linting (skillsaw)
 
 [`skillsaw`](https://skillsaw.org/) lints the **entire repository**
-(`skillsaw lint .`, per `.skillsaw.yaml`'s exclude list, which only removes
-agent-discovery symlink dirs and `.artifacts/` — root-level files including
-this one are in scope). Rule configuration lives in `.skillsaw.yaml`;
+(`skillsaw lint .`, per `.skillsaw.yaml`'s exclude list, which removes
+agent-discovery symlink dirs, `.artifacts/`, and generated `docs/` —
+root-level files including this one are in scope). Rule configuration lives in `.skillsaw.yaml`;
 [`.github/workflows/skillsaw.yml`](.github/workflows/skillsaw.yml) runs it
 on every PR with `strict: true` (every warning fails the check), pinned to
 the version in `Makefile`'s `SKILLSAW_VERSION`.
@@ -137,10 +138,11 @@ osac-ai-skills/
 │   ├── rules/                       # Shared canonical content (fan-out — see README.md)
 │   ├── agents/                      # Shared canonical content (fan-out — see README.md)
 │   └── hooks/                       # Shared canonical content (fan-out — see README.md)
-├── .github/workflows/               # skillsaw, skillsaw-review, skill-version-check
+├── .github/workflows/               # skillsaw, skillsaw-review, skill-version-check, update-docs
+├── docs/                            # Generated GitHub Pages catalog (`make docs`; do not hand-edit)
 ├── .skillsaw.yaml                   # skillsaw rule configuration
 ├── OWNERS                           # Approvers / reviewers
-├── Makefile                         # `make skillsaw`
+├── Makefile                         # `make skillsaw`, `make docs`
 ├── README.md                        # Consumer fan-out mechanics
 ├── AGENTS.md                        # This file
 ├── CLAUDE.md                        # Claude Code entry point (points here)

@@ -12,6 +12,8 @@ compute instances with networking capabilities. This repository hosts:
   `tools/jira-safe-create.sh`)
 - Skill-quality eval harness (`evals/`)
 
+Browse the live catalog: [https://osac-project.github.io/osac-ai-skills/](https://osac-project.github.io/osac-ai-skills/).
+
 This is the skills content store. Bootstrap/orchestration (what to clone and
 when) lives in consumer repos — primarily `osac/tools/bootstrap.sh`, and
 until cutover also `osac-workspace/bootstrap.sh`. `flightctl/ai-workflows`
