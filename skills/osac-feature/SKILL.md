@@ -190,7 +190,7 @@ Ready to create in Jira:
   Assignee:    <name or unassigned>
 
   Bootstrap epic:  <FEATURE_SUMMARY> - Bootstrap
-    Labels: bootstrap[, no-ui if no UI work]; fix version copied from Feature (when not backlog); team copied from Feature
+    Labels: bootstrap[, no-ui if no UI work]; fix version, component, and team copied from Feature (when set)
   Bootstrap tasks: PRD - <FEATURE_SUMMARY>, Design - <FEATURE_SUMMARY>
     [, UX Design - <FEATURE_SUMMARY>, UI Design - <FEATURE_SUMMARY> if UI work]
 
@@ -255,6 +255,7 @@ Fix version:    <version> | backlog (unset)
 Labels:         [osac-ux, osac-ui if UI work][, customer, customer:<name>] | none
 Bootstrap epic: https://redhat.atlassian.net/browse/<EPIC_KEY>
 Bootstrap labels: bootstrap[, no-ui if no UI work]
+Epic component: <copied from Feature | in-memory fallback>
 Epic fix version: <copied from Feature | not set (backlog)>
 Epic team:      <copied from Feature | already set (unchanged)>
 Bootstrap tasks:

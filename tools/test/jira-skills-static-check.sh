@@ -124,7 +124,7 @@ test_osac_feature_takeover_and_derive() {
     || fail 'bootstrap-epic.md epic create must use --component "${BOOTSTRAP_COMPONENT}"'
   pass "osac-feature: epic create uses BOOTSTRAP_COMPONENT"
 
-  rg -q 'read_feature_fields "$feature_key"' "$bash" \
+  rg -qF 'read_feature_fields "$feature_key"' "$bash" \
     || fail "apply_bootstrap_epic_metadata must call read_feature_fields \"\$feature_key\" (Feature team, not only \$team_name)"
   pass "osac-feature: apply_bootstrap_epic_metadata reads Feature team"
 }
