@@ -1,4 +1,5 @@
-# Reviewer configuration for create-pr's Step 4 pre-flight review gate.
+# Reviewer configuration for create-pr's Step 4 pre-flight review gate
+# and for /pre-pr-review (standalone copy of that gate).
 # See skills/create-pr/references/reviewer-config.md for the full schema,
 # validation checklist, and output contract.
 #

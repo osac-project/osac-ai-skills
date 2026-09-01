@@ -91,6 +91,7 @@ Phases: `/e2e:ingest` → `/e2e:plan` → `/e2e:code` → `/e2e:validate` →
 - `/bugfix` — Systematic bug investigation and fix (phase-based)
 - `/debug-e2e` — Debug a failing CI job using build logs and gathered OSAC artifacts
 - `/create-pr` — Runs repo-specific validation and creates a PR via the fork workflow
+- `/pre-pr-review` — Config-driven pre-flight review gate (create-pr Step 4) without opening a PR
 - `/code-review` — Review your current diff before submitting
 
 Each skill is phase-based — you can jump directly to any phase (e.g.

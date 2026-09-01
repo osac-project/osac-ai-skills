@@ -67,6 +67,7 @@ OSAC_SKILLS=(
   osac-release
   performance-review
   prd-review
+  pre-pr-review
   presentation
   quick-fix
   report-bug
