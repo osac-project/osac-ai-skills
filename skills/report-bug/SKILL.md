@@ -227,6 +227,7 @@ placeholder or empty value.
 - Use `--raw` with stdout/stderr temps; parse with `jq -r '.key // empty' "$OUT"` — not from a command substitution around `jira issue create`.
 - Do **not** wrap create in `$(...)` or hide stderr with `2>/dev/null`.
 - Do **not** use `grep -oP` on the text output — it can match multiple keys in the URL or fail silently.
+- If the create (or the epic-link edit below) is blocked by Cursor Auto-review, gated by a Claude Code permission prompt, or hangs silently, retry the **same** command per [jira-task-management](../jira-task-management/SKILL.md)'s "Approval blocks vs. stdin hangs on create/edit" — keep `--template`/`--no-input`/`</dev/null`; do **not** drop the body or invent a skip-description path.
 
 ### Link to epic
 

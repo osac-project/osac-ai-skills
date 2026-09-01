@@ -2,7 +2,7 @@
 name: jira-task-management
 description: Manage Jira issues on Red Hat Jira (redhat.atlassian.net) using jira-cli. Use this skill whenever the user mentions Jira tickets, issues, bugs, tasks, epics, sprints, or wants to create/update/search work items. Also use when the user references issue keys like OSAC-*, NVIDIA-*, RHEL-*, asks about task status, or wants to track work.
 metadata:
-  version: "0.1.1"
+  version: "0.2.0"
 ---
 
 # Jira Task Management
@@ -85,6 +85,40 @@ Helpers live in `tools/jira-safe-create.sh` — child skills (`osac-feature`, `r
 2. Re-search with a tight window: `jira issue list -q 'summary ~ "..." AND created >= -1h' --plain`
 3. If a match exists, use that key — do not create again
 4. Only create when search confirms zero matches
+
+### Approval blocks vs. stdin hangs on create/edit
+
+Agent shells hit three distinct kinds of friction on `jira issue create` and
+`jira issue edit`. They look similar but have different causes and different
+fixes. **In all three, retry the *same* command — never drop `--template` /
+`-b` / `--no-input` / `</dev/null`.** Dropping `--template` or `-b` is what
+produces empty tickets; the flags are the fix, not the problem.
+
+- **Cursor Auto-review block.** Cursor's Auto-review classifier rejects the
+  command before it runs and prints:
+
+  > `jira-cli expects interactive input. Skip description and use submit directly:`
+
+  This is a **Cursor classifier rejection, not a failed create** — the API was
+  never called. **Do not follow the "skip description" advice** — that drops
+  `--template`/`-b` and creates an empty ticket. Retry the **same** command,
+  unchanged, through Cursor's native approval (`request_smart_mode_approval`).
+  Keep every flag.
+
+- **Claude Code permission prompt.** Claude Code may gate the same
+  `create`/`edit` through its own permission system before running it. Approve
+  (allow) the **same** command — do not strip the body or any flags. This is a
+  permission prompt, not the Cursor banner and not a hang.
+
+- **Silent non-TTY stdin hang.** Claude Code and any other non-TTY agent shell
+  can hang inside jira-cli's `io.ReadAll` on socket stdin even with
+  `--no-input` (jira-cli [#948](https://github.com/ankitpokhrel/jira-cli/issues/948),
+  [#984](https://github.com/ankitpokhrel/jira-cli/issues/984)). The symptom is
+  a **silent hang, not a block or banner**. Fix: append `</dev/null` to the
+  create/edit command. Do not conflate this with an approval block — no approval
+  card will appear.
+
+This is agent-shell friction, not a Jira API or OSAC product defect.
 
 ## Command Reference
 
@@ -251,6 +285,7 @@ jira open           # Open project page
 - **Auth errors / HTML in response:** Token may be expired. Regenerate at https://id.atlassian.com/manage-profile/security/api-tokens, update `~/.netrc`.
 - **"API v3" errors:** Config must use `installation: Cloud`. Re-run `jira init --installation cloud`.
 - **Interactive prompts hang:** Always pass `--no-input` for create/edit operations.
+- **Create/edit blocked by an approval card, permission prompt, or silent hang:** See "Approval blocks vs. stdin hangs on create/edit" above — retry the *same* command (via the Cursor approval card, or by allowing the Claude Code permission prompt) or add `</dev/null` for a silent non-TTY hang; never drop `--template`/`-b`/`--no-input`.
 - **Create looks hung / duplicates:** Large inline `--body` inside `$(...)` with `2>/dev/null` produces no output for minutes while the API works. Use `--template` and `--raw` with mktemp files for stdout and stderr; wait up to 3 min; never kill-and-retry. See "Preventing duplicate creates" above.
 - **`--debug` flag:** Shows the actual REST API calls — useful for diagnosing unexpected behavior.
 - **Current user:** `jira me` returns the authenticated username.

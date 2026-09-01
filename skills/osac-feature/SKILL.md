@@ -2,7 +2,7 @@
 name: osac-feature
 description: Create Feature issues in the OSAC Jira project. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.
 metadata:
-  version: "0.2.3"
+  version: "0.2.4"
 ---
 
 # OSAC Feature Creation
@@ -273,6 +273,7 @@ See [feature-body-template.md](references/feature-body-template.md) for the Jira
   e.g. `PRD - <FEATURE_SUMMARY>`) so they're identifiable outside the epic/Feature —
   see [bootstrap-tasks.md](references/bootstrap-tasks.md)
 - Bootstrap epic: create without `-P`, then `jira issue edit -P` — Epic create with `-P` on a Feature parent returns HTTP 400; use `</dev/null` on all jira create/edit to avoid stdin hangs (jira-cli#948)
+- If a Feature/epic/task create or edit is blocked by Cursor Auto-review, gated by a Claude Code permission prompt, or hangs silently, retry the **same** command per [jira-task-management](../jira-task-management/SKILL.md)'s "Approval blocks vs. stdin hangs on create/edit" — do **not** drop `--template`/`-b`/`--no-input`/`</dev/null` or invent a skip-description path, which creates empty Features
 - Gate tasks track documentation milestones, not implementation work
 - **Fix version:** Feature chooses at confirm gate; bootstrap epic copies when set;
   gate tasks never receive `fixVersion`
