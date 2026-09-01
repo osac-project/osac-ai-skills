@@ -135,7 +135,27 @@ test_osac_feature_takeover_and_derive() {
     || fail "feature-body-template.md takeover must write the body with jira issue edit -b"
   pass "osac-feature: takeover body uses issue edit -b"
 
-  rg -qi 'before.*confirm' "$skill_md" \
+  rg -qF "tr '\\n\\r' ' '" "$bash" \
+    || fail "feature_description_text must convert newlines to spaces before sed"
+  pass "osac-feature: description flatten joins newlines"
+
+  rg -qF 'OSAC-[0-9]+' "$bash" \
+    || fail "assert_empty_placeholder must require an OSAC-[0-9]+ key"
+  rg -qF '.fields.project.key' "$bash" \
+    || fail "assert_empty_placeholder must check fields.project.key"
+  pass "osac-feature: placeholder check enforces OSAC project"
+
+  rg -q 'FEATURE_COMPONENT=$' "$bash" \
+    && rg -q 'FEATURE_TEAM=$' "$bash" \
+    && rg -q 'FEATURE_FIX_VERSION=$' "$bash" \
+    || fail "read_feature_fields must clear FEATURE_* before each read"
+  pass "osac-feature: read_feature_fields clears FEATURE_*"
+
+  rg -qF '"to be determined"|"coming soon"' "$bash" \
+    || fail 'is_placeholder_description must quote multi-word case patterns'
+  pass "osac-feature: placeholder case patterns are quoted"
+
+  rg -qi 'the confirm gate \(not after\)' "$skill_md" \
     || fail "SKILL.md must run same-summary duplicate check before the confirm gate"
   pass "osac-feature: same-summary duplicate check before confirm"
 }

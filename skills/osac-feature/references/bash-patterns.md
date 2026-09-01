@@ -102,7 +102,7 @@ feature_description_text() {
     elif type == "string" then .
     else [.. | objects | select(.type == "text") | .text] | join(" ")
     end
-  ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[[:space:]]\{1,\}/ /g'
+  ' | tr '\n\r' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[[:space:]]\{1,\}/ /g'
 }
 
 # 0 if empty/whitespace or the whole text is a TBD-like token (exact, not substring).
@@ -111,7 +111,7 @@ is_placeholder_description() {
   lowered=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
   [ -z "$lowered" ] && return 0
   case "$lowered" in
-    tbd|todo|tbc|n/a|na|placeholder|to be determined|coming soon|wip) return 0 ;;
+    tbd|todo|tbc|n/a|na|placeholder|"to be determined"|"coming soon"|wip) return 0 ;;
   esac
   return 1
 }
@@ -132,7 +132,11 @@ count_feature_children() {
 
 # 0 only when description is a placeholder AND the Feature has no children. Does not edit.
 assert_empty_placeholder() {
-  local key=$1 view err desc itype
+  local key=$1 view err desc itype project
+  if ! [[ "${key}" =~ ^OSAC-[0-9]+$ ]]; then
+    echo "${key:-<empty>} is not an OSAC Feature key — not overwriting" >&2
+    return 1
+  fi
   view=$(new_temp osac-jira-placeholder-view)
   add_temp "$view"
   err=$(new_temp osac-jira-placeholder-err)
@@ -144,6 +148,11 @@ assert_empty_placeholder() {
   fi
   if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
     echo "Could not parse ${key} JSON for placeholder check — stopping" >&2
+    return 1
+  fi
+  project=$(jq -r '.fields.project.key // empty' <"$view")
+  if [ "$project" != "OSAC" ]; then
+    echo "${key} is in project '${project:-unknown}', not OSAC — not overwriting" >&2
     return 1
   fi
   itype=$(jq -r '.fields.issuetype.name // empty' <"$view")
@@ -168,6 +177,9 @@ assert_empty_placeholder() {
 
 read_feature_fields() {
   local key=$1 view err component team version
+  FEATURE_COMPONENT=
+  FEATURE_TEAM=
+  FEATURE_FIX_VERSION=
   view=$(new_temp osac-jira-feature-fields)
   add_temp "$view"
   err=$(new_temp osac-jira-feature-fields-err)
@@ -258,7 +270,7 @@ validate_fix_version() {
 # copying an unset version onto the bootstrap epic. Backlog is not a failure.
 apply_feature_fix_version() {
   local key=$1 version=$2
-  [ "$version" = "backlog" ] && return 0
+  [ "$(printf '%s' "$version" | tr '[:upper:]' '[:lower:]')" = "backlog" ] && return 0
   local err
   err=$(new_temp osac-jira-fixver-err)
   add_temp "$err"
@@ -401,12 +413,13 @@ EOF
 # so the checks run independently rather than one short-circuiting the others.
 apply_bootstrap_epic_metadata() {
   local epic_key=$1 feature_key=$2 fix_version=$3 team_name=$4 requires_ui=${5:-yes}
-  local err team_source=$team_name
+  local err team_source=$team_name feature_component=""
   err=$(new_temp osac-jira-bootstrap-meta-err)
   add_temp "$err"
 
   if read_feature_fields "$feature_key"; then
     [ -n "$FEATURE_TEAM" ] && team_source=$FEATURE_TEAM
+    feature_component=${FEATURE_COMPONENT:-}
   fi
 
   if ! jira issue edit "$epic_key" -l bootstrap --no-input 2>>"$err" </dev/null; then
@@ -434,7 +447,7 @@ apply_bootstrap_epic_metadata() {
     return 0
   fi
 
-  if [ "$fix_version" != "backlog" ]; then
+  if [ "$(printf '%s' "$fix_version" | tr '[:upper:]' '[:lower:]')" != "backlog" ]; then
     local epic_version_count
     epic_version_count=$(printf '%s' "$raw" | jq -r '[.fields.fixVersions[]?.name] | length')
     if [ "${epic_version_count:-0}" -eq 0 ]; then
@@ -455,7 +468,7 @@ apply_bootstrap_epic_metadata() {
   local epic_comp_count epic_component
   epic_comp_count=$(printf '%s' "$raw" | jq -r '[.fields.components[]?.name] | length')
   if [ "${epic_comp_count:-0}" -eq 0 ]; then
-    epic_component=${FEATURE_COMPONENT:-${BOOTSTRAP_COMPONENT:-}}
+    epic_component=${feature_component:-${BOOTSTRAP_COMPONENT:-}}
     if [ -n "$epic_component" ]; then
       if ! jira issue edit "$epic_key" --component "$epic_component" --no-input 2>>"$err" </dev/null; then
         echo "Bootstrap component copy failed for ${epic_key} (${epic_component}) — set manually:" >&2

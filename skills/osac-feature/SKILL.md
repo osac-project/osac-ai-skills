@@ -91,12 +91,13 @@ Store the validated value in `FEATURE_SUMMARY`.
 If the user supplies an `OSAC-NNNN` key, treat it as the takeover target:
 
 1. `jira issue view "${KEY}" --raw`. Stop if the view fails or the type is not Feature.
-2. Load `FEATURE_SUMMARY` from `.fields.summary` (do not rename the Feature).
-3. Run `assert_empty_placeholder "$KEY"` (see [bash-patterns.md](references/bash-patterns.md)). If it fails, stop and warn — never overwrite a Feature that has a real description or any children.
+2. Load `FEATURE_SUMMARY` from `.fields.summary` (do not rename the Feature). Re-apply the Feature summary validation above. If it fails, stop — do not rename, do not take over, do not bootstrap.
+3. Run `assert_empty_placeholder "$KEY"` (see [bash-patterns.md](references/bash-patterns.md)). If it fails, stop and warn — never overwrite a Feature that has a real description, any children, or a non-OSAC key.
 4. `read_feature_fields "$KEY"`. Copy into in-memory vars when set:
-   `COMPONENT=$FEATURE_COMPONENT`, `TEAM=$FEATURE_TEAM`,
-   `FIX_VERSION=$FEATURE_FIX_VERSION`. Prompt only for fields the Feature
-   lacks.
+   `COMPONENT=$FEATURE_COMPONENT`, `TEAM=$FEATURE_TEAM`. Copy
+   `FIX_VERSION=$FEATURE_FIX_VERSION` only when that value is set and is not
+   case-insensitive `backlog` (treat `Backlog`/`backlog` as unset). Prompt only
+   for fields the Feature lacks.
 5. Always ask the UI-work question.
 
 ### Same-summary Feature (no key supplied)
@@ -104,10 +105,12 @@ If the user supplies an `OSAC-NNNN` key, treat it as the takeover target:
 If `KEY` is still unset after gathering the summary, run the Duplicate check
 in [feature-body-template.md](references/feature-body-template.md) **before**
 the confirm gate (not after). On a single empty-placeholder hit, set `KEY`,
-`read_feature_fields`, copy `FEATURE_*` as in Existing Feature key, and prompt
-only for gaps. Multiple hits: ask which key, then the same placeholder check.
-A non-empty Feature: stop — never overwrite. Then use the takeover confirm
-block that includes `KEY`.
+`read_feature_fields`, copy `FEATURE_*` as in Existing Feature key (including
+the `backlog` skip), and prompt only for gaps. Multiple hits: ask which key,
+then the same placeholder check. If `FEATURE_SUMMARY` is loaded from Jira
+(user-supplied key, or a chosen key among multiple hits), re-apply summary
+validation and stop on failure — do not rename. A non-empty Feature: stop —
+never overwrite. Then use the takeover confirm block that includes `KEY`.
 
 ### Component
 
@@ -259,10 +262,11 @@ Execute in order. **Read each reference file before its step** — do not skip.
 | Failure | Action |
 |---------|--------|
 | Invalid summary (JQL/shell unsafe chars, >243 chars) | Reject before confirm; ask user to revise |
+| Stored Feature summary fails the same validation | Stop; report the key; do not rename or take over |
 | User declines confirm gate | Stop; no Jira creates or edits |
 | Empty placeholder Feature (user-supplied key or same-summary) | Take over: fill the standard body; run bootstrap against the existing key |
 | Non-empty Feature (real description or any children) | Stop; report the key; never overwrite |
-| User-supplied key is not a Feature | Stop; report the issue type |
+| User-supplied key is not an OSAC Feature | Stop; report project/type; never overwrite |
 | Empty `KEY` after Feature create | Stop; report `$ERR` and error JSON; do not bootstrap |
 | Fix version edit failed after Feature create | Non-fatal; report manual `jira issue edit --fix-version …`; continue bootstrap |
 | Team field edit failed after Feature/epic/task create | Non-fatal; report manual Jira UI edit; continue bootstrap |
@@ -286,7 +290,7 @@ slow create appears hung, wait for it to finish — do not kill and retry.
 
 Output to user on success:
 
-```
+```text
 Feature created or completed:
 
 Jira:           https://redhat.atlassian.net/browse/<KEY>

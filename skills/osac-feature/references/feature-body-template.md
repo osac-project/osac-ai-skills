@@ -124,7 +124,8 @@ if [ "$TAKEOVER" -eq 1 ]; then
         cat "$ERR" >&2
       fi
     fi
-    if [ -n "${FEATURE_FIX_VERSION:-}" ]; then
+    if [ -n "${FEATURE_FIX_VERSION:-}" ] \
+      && [ "$(printf '%s' "$FEATURE_FIX_VERSION" | tr '[:upper:]' '[:lower:]')" != "backlog" ]; then
       BOOTSTRAP_FIX_VERSION="$FEATURE_FIX_VERSION"
     elif apply_feature_fix_version "$KEY" "$FIX_VERSION"; then
       BOOTSTRAP_FIX_VERSION="$FIX_VERSION"
