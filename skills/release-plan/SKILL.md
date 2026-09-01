@@ -2,12 +2,12 @@
 name: release-plan
 description: "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap."
 metadata:
-  version: "0.1.0"
+  version: "0.4.1"
 ---
 
 # Release Plan
 
-Generate a structured JSON report showing what an OSAC version will deliver — the default and only output unless the user asks for more. Also generate companion HTML and/or markdown reports, but only if explicitly requested. Shows cumulative capabilities across ALL prior versions (0.1, 0.2, +0.3 style), customer requirements coverage, and use-case breakdowns with customer driver tags.
+Generate a structured JSON report showing what an OSAC version will deliver — the default and only output unless the user asks for more. Also generate companion HTML and/or markdown reports, but only if explicitly requested. Shows cumulative capabilities across ALL prior versions (0.1, 0.2, +0.3 style), customer requirements coverage, and cumulative use-case breakdowns with the target version's additions highlighted and customer driver tags.
 
 The JSON output is the machine-readable form consumed by the Org Pulse dashboard's Release Plan view (`org-pulse` releases module) — it must contain the full report content, not a summary of it. See Step 6 for the schema.
 
@@ -274,4 +274,4 @@ After saving whichever files were generated:
 - **No M1/M2 granularity**: Treat 0.2-M1 and 0.2-M2 as part of 0.2. Query `fixVersion = '0.2'` and treat all 0.2 features together.
 - **Component-based grouping**: Use component field, not Team field, for grouping (Team may not be set on all features).
 - **N-1 vs N-2+ distinction**: For the immediately preceding version (N-1), include ALL features regardless of status — they are expected to ship before the target version. For N-2 and older, include only Closed+Done features. This ensures in-flight work like a storage framework being built in 0.2 appears in the 0.3 report instead of being silently dropped for not yet being Done.
-- **Target version scope**: Only features where `fixVersion = '<TARGET>'` belong in the "New in N" sections. Never include features from prior versions in the target version's use case cards, even if they are still In Progress. Those are prior version items regardless of their current status.
+- **Target version scope (Feature Inventory only)**: Only features where `fixVersion = '<TARGET>'` belong in Section 6 (Feature Inventory) — that section is a clean list of what this version delivers, not a cumulative one. Use Case Cards, the Service Offering Matrix, and Cumulative Capability Progression are cumulative across all versions with the target's additions highlighted; do not restrict those three sections to `fixVersion = '<TARGET>'`.

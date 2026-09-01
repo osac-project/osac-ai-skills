@@ -41,7 +41,9 @@ Full schema and rules for the `.json` output of the `release-plan` skill (see [.
       "key": "caas",
       "title": "CaaS — Cluster Provisioning",
       "items": [
-        { "jira": "OSAC-1415", "title": "Support cluster upgrade", "customers": ["Moc", "Telenor"] }
+        { "jira": "OSAC-1191", "title": "Cluster provisioning via HyperShift + Metal3 + BCM inventory", "version": "0.1", "isTarget": false, "status": "Done ✅", "customers": [] },
+        { "jira": "OSAC-1288", "title": "Managed cluster versions", "version": "0.2", "isTarget": false, "status": "In Progress", "customers": [] },
+        { "jira": "OSAC-1415", "title": "Support cluster upgrade", "version": "+<TARGET>", "isTarget": true, "status": "In Review", "customers": ["Moc", "Telenor"] }
       ]
     }
   ],
@@ -93,9 +95,11 @@ Full schema and rules for the `.json` output of the `release-plan` skill (see [.
 
 Mirror the HTML rules from `SKILL.md` Sections 1–7:
 
-- `serviceMatrix.rows[].cells` uses a `—` sentinel string (not an empty array) for a service/dimension with no history in any version, so consumers can distinguish "no data" from "not yet fetched".
+- `useCaseCards[].items` are cumulative across all versions, not just the target: each item carries `version` (`"0.1"`, `"0.2"`, …, or `"+<TARGET>"`) and `isTarget` (`true` only for the target version's additions). Omit versions that added nothing to a use case — same rule as `cumulativeProgression`. Same use-case grouping and no-standalone-UI-card rule as the HTML (Section 3).
+- `useCaseCards[].items[].status` uses the same real-Jira-status mapping as `featureInventory`/`customerCoverage` (`"Done ✅"`, `"In Progress"`, `"In Review"`, `"Planned"`) for every item, target and prior alike. Consumers should only surface it as a caveat for prior-version items (`isTarget: false`) whose status is not one of the two finished values defined below — `"Done ✅"` or `"Closed ✅"` — a target-version item being Planned/In Progress is expected in a forward-looking report and needs no caveat.
+- `serviceMatrix.rows[].cells` uses a `—` sentinel string (not an empty array) for a service/dimension with **no history in any version**. When a cell *does* have history, its array must only contain entries for versions that actually added a capability — never include an entry whose `text` is a placeholder/dash for a version that added nothing; omit that version's entry entirely instead.
 - `cumulativeProgression[].versions` omits entries for versions that added nothing to that use case — the same rule as the markdown/HTML tables (Section 5).
-- `featureInventory` never includes a standalone "UI" group; spikes get their own `"Spikes (Investigations)"` group and are excluded from `serviceMatrix` and `cumulativeProgression`.
+- `featureInventory` is **target-version-only**, unlike `serviceMatrix`, `useCaseCards`, and `cumulativeProgression`: it contains only the features fetched in Step 1 with `fixVersion = "<TARGET>"` — never backfill it with prior-version features, even ones referenced elsewhere in the report (e.g. via `customerCoverage`). It never includes a standalone "UI" group; spikes get their own `"Spikes (Investigations)"` group and are excluded from `serviceMatrix` and `cumulativeProgression`.
 - `status` values are the actual Jira status, mapped the same way as the HTML/markdown tables: `"Done ✅"` / `"Closed ✅"` for Closed+Done, `"In Progress"`, `"In Review"`, `"Planned"` for New/not-started. Map every row from its real Jira status individually — do not reuse one status value across rows.
 - `notes.backlog` includes every customer-labeled feature in Backlog or beyond the target version — never truncated.
 - All Jira keys use the bare key (`"OSAC-1415"`); consumers construct the browse URL themselves (`https://redhat.atlassian.net/browse/<key>`) rather than the JSON embedding full URLs, since the HTML/markdown embed links but downstream renderers need the raw key too.
