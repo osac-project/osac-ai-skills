@@ -162,7 +162,9 @@ If ambiguous, ask again — do not infer from the description.
 ### Fix version
 
 On create, ask explicitly — do not infer from summary text (e.g. `(0.2)` in the title).
-On takeover, skip this prompt when `FEATURE_FIX_VERSION` is already set; store it in `FIX_VERSION`.
+On takeover, skip this prompt when `FEATURE_FIX_VERSION` is already set and is
+not case-insensitive `backlog` (treat `Backlog`/`backlog` as unset and prompt).
+When set to a real release, store it in `FIX_VERSION`.
 
 1. Run `list_fix_version_suggestions` (see [bash-patterns.md](references/bash-patterns.md)) to fetch
    unreleased OSAC milestones, excluding `0.0` and the literal `Backlog`

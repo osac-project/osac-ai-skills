@@ -2,8 +2,9 @@
 
 **Read this file when creating the Feature issue, or taking over an empty
 placeholder.** Run the Duplicate check **before** the confirm gate when `KEY`
-is unset (same-summary). After confirm, skip the JQL search if `KEY` is
-already set and go straight to writing `$BODY`.
+is unset (same-summary). After confirm, if `KEY` is set (user-supplied or a
+same-summary hit), re-run `assert_empty_placeholder` then edit that key — do
+not skip the assert, do not create a second Feature. If `KEY` is unset, create.
 
 The User Stories section must include a subsection for each OSAC persona
 defined in `osac-docs/personas.md` (canonical source:
@@ -104,7 +105,9 @@ FEATURE_LABELS=()
 [ "$REQUIRES_UI" = "yes" ] && FEATURE_LABELS+=(--label osac-ux --label osac-ui)
 [ -n "${CUSTOMER:-}" ] && FEATURE_LABELS+=(--label customer --label "customer:${CUSTOMER}")
 
-if [ "$TAKEOVER" -eq 1 ]; then
+if [ -n "${KEY:-}" ]; then
+  assert_empty_placeholder "$KEY" \
+    || { echo "Existing Feature ${KEY} is not an empty placeholder — not overwriting" >&2; exit 1; }
   # issue edit has no --template (create-only); -b plus </dev/null avoids a stdin hang.
   if ! jira issue edit "$KEY" -b "$(cat "$BODY")" --no-input 2>"$ERR" </dev/null; then
     echo "Feature body edit failed for ${KEY} — stopping" >&2

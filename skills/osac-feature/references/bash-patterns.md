@@ -271,9 +271,16 @@ validate_fix_version() {
 apply_feature_fix_version() {
   local key=$1 version=$2
   [ "$(printf '%s' "$version" | tr '[:upper:]' '[:lower:]')" = "backlog" ] && return 0
-  local err
+  local err existing
   err=$(new_temp osac-jira-fixver-err)
   add_temp "$err"
+  # --fix-version appends. If the Feature already has Jira's Backlog release,
+  # remove it first so the chosen milestone is not stored alongside Backlog.
+  existing=${FEATURE_FIX_VERSION:-}
+  if [ -n "$existing" ] \
+    && [ "$(printf '%s' "$existing" | tr '[:upper:]' '[:lower:]')" = "backlog" ]; then
+    jira issue edit "$key" --fix-version "-${existing}" --no-input 2>>"$err" </dev/null || true
+  fi
   if ! jira issue edit "$key" --fix-version "$version" --no-input 2>"$err" </dev/null; then
     echo "Fix version edit failed for ${key} (${version}) — set manually:" >&2
     echo "  jira issue edit ${key} --fix-version \"${version}\" --no-input </dev/null" >&2
@@ -486,7 +493,9 @@ Safe-create rules (all create/edit steps):
 - Append **`</dev/null`** to every `jira issue create` and `jira issue edit` — jira-cli
   blocks on stdin in non-TTY shells ([jira-cli#948](https://github.com/ankitpokhrel/jira-cli/issues/948))
 - Run `jira issue create` directly — not inside `$(...)`
-- Write bodies to `--template` files; capture stdout/stderr to temps
+- Create bodies: `--template "$BODY"`. Edit bodies: `-b "$(cat "$BODY")"` —
+  `jira issue edit` has no `--template`. Do not pipe the body on stdin.
+  Capture stdout/stderr to temps.
 - Allow up to 3 minutes per operation; **never kill** and retry
 - Before retry, re-search Jira — duplicate creates are worse than slow creates
 - If stdout is slow, poll Jira (`jira issue view`) instead of killing the in-flight command

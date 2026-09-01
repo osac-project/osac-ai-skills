@@ -133,7 +133,21 @@ test_osac_feature_takeover_and_derive() {
   fi
   rg -qF -- '-b "$(cat "$BODY")"' "$body" \
     || fail "feature-body-template.md takeover must write the body with jira issue edit -b"
+  if rg -q 'if \[ "\$TAKEOVER" -eq 1 \]' "$body"; then
+    fail "feature-body-template.md write path must branch on KEY, not a TAKEOVER flag from an earlier fence"
+  fi
+  rg -qF '[ -n "${KEY:-}" ]' "$body" \
+    || fail "feature-body-template.md write path must take over when KEY is set"
+  local assert_count
+  assert_count=$(rg -c 'assert_empty_placeholder' "$body" || true)
+  if [ "${assert_count:-0}" -lt 3 ]; then
+    fail "feature-body-template.md must re-run assert_empty_placeholder immediately before takeover edit (got ${assert_count:-0})"
+  fi
   pass "osac-feature: takeover body uses issue edit -b"
+
+  rg -q 'issue edit.*no.*--template' "$bash" \
+    || fail "bash-patterns.md safe-create rules must say issue edit has no --template"
+  pass "osac-feature: safe-create rules distinguish create --template from edit -b"
 
   rg -qF "tr '\\n\\r' ' '" "$bash" \
     || fail "feature_description_text must convert newlines to spaces before sed"
