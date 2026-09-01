@@ -2,7 +2,7 @@
 name: report-bug
 description: Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says 'report a bug', 'file a bug', 'log a bug', 'open a bug ticket', or wants to track a bug without immediately writing a fix.
 metadata:
-  version: "0.1.5"
+  version: "0.1.6"
 ---
 
 # Report Bug
@@ -160,6 +160,8 @@ capture stdout/stderr separately:
 
 Use exactly these sections — no additions. Replace `<SKILL_VERSION>` in the trailer with this skill's `metadata.version` value:
 
+Write the bug body to a temp file, create the Jira issue, and extract the key.
+
 ```bash
 BODY=$(new_temp osac-bug-body)
 add_temp "$BODY"
@@ -228,11 +230,14 @@ placeholder or empty value.
 
 ### Link to epic
 
+Set the parent epic on the newly created issue.
+
 ```bash
 jira issue edit $KEY -P <EPIC-KEY> --no-input </dev/null
 ```
 
-If user specified an assignee (no `--no-input` flag — `assign` does not support it):
+Assign the issue to the user-specified person (no `--no-input` flag — `assign` does not support it):
+
 ```bash
 jira issue assign $KEY <assignee>
 ```
@@ -242,6 +247,8 @@ jira issue assign $KEY <assignee>
 If logs, screenshots, or other files came up during the conversation, list them and ask the user which ones to attach. Ask if there is anything else they want to add.
 
 **Do not attach files containing sensitive data (credentials, tokens, keys, secrets, passwords, API keys, PII, or internal hostnames). Read the file content before attaching. If in doubt, ask the user.**
+
+Upload each approved file to the Jira issue via the REST API.
 
 Re-source the shared script (see rationale below) before running:
 
