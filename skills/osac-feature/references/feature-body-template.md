@@ -117,12 +117,16 @@ if [ -n "${KEY:-}" ]; then
   fi
   # --label appends. Drop skill-owned labels first so UI=no / no-customer
   # does not leave osac-ux/osac-ui/customer/customer:* from a prior run.
-  clear_feature_managed_labels "$KEY" || true
-  if [ ${#FEATURE_LABELS[@]} -gt 0 ]; then
-    if ! jira issue edit "$KEY" "${FEATURE_LABELS[@]}" --no-input 2>>"$ERR" </dev/null; then
-      echo "Feature label edit failed for ${KEY} — continuing bootstrap" >&2
-      cat "$ERR" >&2
+  # On clear failure, skip apply — do not stack new labels on ones we failed to drop.
+  if clear_feature_managed_labels "$KEY"; then
+    if [ ${#FEATURE_LABELS[@]} -gt 0 ]; then
+      if ! jira issue edit "$KEY" "${FEATURE_LABELS[@]}" --no-input 2>>"$ERR" </dev/null; then
+        echo "Feature label edit failed for ${KEY} — continuing bootstrap" >&2
+        cat "$ERR" >&2
+      fi
     fi
+  else
+    echo "Feature managed-label clear failed for ${KEY} — skipping label apply so stale managed labels are not stacked" >&2
   fi
   if read_feature_fields "$KEY"; then
     if [ -z "${FEATURE_COMPONENT:-}" ]; then

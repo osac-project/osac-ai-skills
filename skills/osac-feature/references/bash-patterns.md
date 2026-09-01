@@ -93,7 +93,8 @@ Flatten a Feature's description and fields for takeover. ADF `type` names
 are strings too — extract only `type=text` nodes, or a whole-description
 token list would never match `tbd`. Flattened text of `""` is not enough:
 ADF that still has other node types (media, status, mention, …) is a real
-description. Allowed wrappers when the text is empty or TBD-like: `doc`,
+description. Walk `content` only — `marks` (strong, link, …) are formatting.
+Allowed wrappers when the text is empty or TBD-like: `doc`,
 `paragraph`, `text`, `hardBreak`.
 
 ```bash
@@ -108,8 +109,8 @@ feature_description_text() {
   ' | tr '\n\r' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[[:space:]]\{1,\}/ /g'
 }
 
-# 0 when ADF contains a node type other than doc/paragraph/text/hardBreak.
-# Plain-string and null descriptions: 1 (no ADF nodes to reject).
+# 0 when ADF content has a node type other than doc/paragraph/text/hardBreak.
+# Marks are not content. Plain-string and null descriptions: 1 (nothing to reject).
 feature_description_has_non_text_nodes() {
   jq -e '
     .fields.description |
@@ -117,8 +118,10 @@ feature_description_has_non_text_nodes() {
     elif type == "string" then false
     else
       any(
-        .. | objects | .type | strings
-        | select(. != "doc" and . != "paragraph" and . != "text" and . != "hardBreak")
+        recurse(.content[]? | objects);
+        (.type // "") != "doc" and (.type // "") != "paragraph"
+          and (.type // "") != "text" and (.type // "") != "hardBreak"
+          and (.type // "") != ""
       )
     end
   ' >/dev/null
@@ -231,7 +234,8 @@ read_feature_fields() {
 
 # Takeover: --label appends. Drop labels this skill owns (osac-ux, osac-ui,
 # customer, customer:*); the caller then applies FEATURE_LABELS. Other labels
-# stay. Returns 1 after warning on view/edit failure — caller continues.
+# stay. Returns 1 after warning on view/parse/edit failure — caller must not
+# append FEATURE_LABELS (do not stack on labels we failed to drop).
 clear_feature_managed_labels() {
   local key=$1 view err labs lab args=()
   view=$(new_temp osac-jira-labels-view)
@@ -245,7 +249,19 @@ clear_feature_managed_labels() {
     cat "$err" >&2
     return 1
   fi
-  jq -r '.fields.labels[]? // empty' <"$view" >"$labs"
+  if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not parse ${key} JSON for labels — managed-label clear skipped" >&2
+    return 1
+  fi
+  if ! jq -e '.fields.labels == null or (.fields.labels | type == "array")' \
+    <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not read ${key} labels (expected array) — managed-label clear skipped" >&2
+    return 1
+  fi
+  if ! jq -r '.fields.labels[]? // empty' <"$view" >"$labs"; then
+    echo "Could not extract ${key} labels — managed-label clear skipped" >&2
+    return 1
+  fi
   while IFS= read -r lab; do
     [ -z "$lab" ] && continue
     case "$lab" in

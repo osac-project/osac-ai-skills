@@ -175,14 +175,18 @@ test_osac_feature_takeover_and_derive() {
     || fail "feature_description_has_non_text_nodes must allow hardBreak as a text wrapper"
   rg -qF 'non-text ADF nodes' "$bash" \
     || fail "assert_empty_placeholder must reject non-text ADF nodes"
+  rg -qF 'recurse(.content[]? | objects)' "$bash" \
+    || fail "feature_description_has_non_text_nodes must walk content, not marks"
   local adf_pred='
     .fields.description |
     if . == null then false
     elif type == "string" then false
     else
       any(
-        .. | objects | .type | strings
-        | select(. != "doc" and . != "paragraph" and . != "text" and . != "hardBreak")
+        recurse(.content[]? | objects);
+        (.type // "") != "doc" and (.type // "") != "paragraph"
+          and (.type // "") != "text" and (.type // "") != "hardBreak"
+          and (.type // "") != ""
       )
     end'
   printf '%s' '{"fields":{"description":{"type":"doc","content":[{"type":"media"}]}}}' \
@@ -195,6 +199,10 @@ test_osac_feature_takeover_and_derive() {
   if printf '%s' '{"fields":{"description":"TBD"}}' \
     | jq -e "$adf_pred" >/dev/null; then
     fail "ADF predicate must accept a plain-string description"
+  fi
+  if printf '%s' '{"fields":{"description":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"TBD","marks":[{"type":"strong"},{"type":"link","attrs":{"href":"https://example.invalid"}}]}]}]}}}' \
+    | jq -e "$adf_pred" >/dev/null; then
+    fail "ADF predicate must accept marked-text TBD as text-only"
   fi
   pass "osac-feature: non-text ADF is not a placeholder"
 
@@ -211,6 +219,13 @@ test_osac_feature_takeover_and_derive() {
     || fail "feature-body-template.md takeover must call clear_feature_managed_labels"
   rg -qF 'customer:*' "$bash" \
     || fail "clear_feature_managed_labels must match customer:* labels"
+  rg -qF 'type == "array"' "$bash" \
+    || fail "clear_feature_managed_labels must require .fields.labels to be an array"
+  if rg -qF 'clear_feature_managed_labels "$KEY" || true' "$body"; then
+    fail "takeover must not apply FEATURE_LABELS after a failed managed-label clear"
+  fi
+  rg -qF 'if clear_feature_managed_labels "$KEY"; then' "$body" \
+    || fail "takeover must apply FEATURE_LABELS only after a successful managed-label clear"
   pass "osac-feature: takeover reconciles managed labels"
 
   if rg -qF 'BOOTSTRAP_FIX_VERSION="${FIX_VERSION:-backlog}"' "$body"; then
