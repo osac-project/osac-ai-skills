@@ -2,7 +2,7 @@
 name: osac-feature
 description: Create Feature issues in the OSAC Jira project, or complete empty placeholder Features. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.
 metadata:
-  version: "0.3.0"
+  version: "0.3.1"
 ---
 
 # OSAC Feature Creation
@@ -92,7 +92,7 @@ If the user supplies an `OSAC-NNNN` key, treat it as the takeover target:
 
 1. `jira issue view "${KEY}" --raw`. Stop if the view fails or the type is not Feature.
 2. Load `FEATURE_SUMMARY` from `.fields.summary` (do not rename the Feature). Re-apply the Feature summary validation above. If it fails, stop — do not rename, do not take over, do not bootstrap.
-3. Run `assert_empty_placeholder "$KEY"` (see [bash-patterns.md](references/bash-patterns.md)). If it fails, stop and warn — never overwrite a Feature that has a real description, any children, or a non-OSAC key.
+3. Run `assert_empty_placeholder "$KEY"` (see [bash-patterns.md](references/bash-patterns.md)). If it fails, stop and warn — never overwrite a Feature that has a real description (including non-text ADF such as media/status/mention), any children, or a non-OSAC key.
 4. `read_feature_fields "$KEY"`. Copy into in-memory vars when set:
    `COMPONENT=$FEATURE_COMPONENT`, `TEAM=$FEATURE_TEAM`. Copy
    `FIX_VERSION=$FEATURE_FIX_VERSION` only when that value is set and is not

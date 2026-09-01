@@ -91,7 +91,10 @@ collect_keys_from_jql() {
 
 Flatten a Feature's description and fields for takeover. ADF `type` names
 are strings too — extract only `type=text` nodes, or a whole-description
-token list would never match `tbd`.
+token list would never match `tbd`. Flattened text of `""` is not enough:
+ADF that still has other node types (media, status, mention, …) is a real
+description. Allowed wrappers when the text is empty or TBD-like: `doc`,
+`paragraph`, `text`, `hardBreak`.
 
 ```bash
 # stdin: jira issue view --raw JSON. One trimmed line of description text.
@@ -103,6 +106,22 @@ feature_description_text() {
     else [.. | objects | select(.type == "text") | .text] | join(" ")
     end
   ' | tr '\n\r' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[[:space:]]\{1,\}/ /g'
+}
+
+# 0 when ADF contains a node type other than doc/paragraph/text/hardBreak.
+# Plain-string and null descriptions: 1 (no ADF nodes to reject).
+feature_description_has_non_text_nodes() {
+  jq -e '
+    .fields.description |
+    if . == null then false
+    elif type == "string" then false
+    else
+      any(
+        .. | objects | .type | strings
+        | select(. != "doc" and . != "paragraph" and . != "text" and . != "hardBreak")
+      )
+    end
+  ' >/dev/null
 }
 
 # 0 if empty/whitespace or the whole text is a TBD-like token (exact, not substring).
@@ -132,7 +151,7 @@ count_feature_children() {
 
 # 0 only when description is a placeholder AND the Feature has no children. Does not edit.
 assert_empty_placeholder() {
-  local key=$1 view err desc itype project
+  local key=$1 view err desc itype project adf_rc=0
   if ! [[ "${key}" =~ ^OSAC-[0-9]+$ ]]; then
     echo "${key:-<empty>} is not an OSAC Feature key — not overwriting" >&2
     return 1
@@ -158,6 +177,15 @@ assert_empty_placeholder() {
   itype=$(jq -r '.fields.issuetype.name // empty' <"$view")
   if [ "$itype" != "Feature" ]; then
     echo "${key} is type '${itype:-unknown}', not Feature — not overwriting" >&2
+    return 1
+  fi
+  feature_description_has_non_text_nodes <"$view" || adf_rc=$?
+  if [ "$adf_rc" -eq 0 ]; then
+    echo "${key} is not an empty placeholder (description has non-text ADF nodes) — not overwriting" >&2
+    return 1
+  fi
+  if [ "$adf_rc" -gt 1 ]; then
+    echo "Could not inspect ${key} ADF for placeholder check — stopping" >&2
     return 1
   fi
   desc=$(feature_description_text <"$view")
@@ -199,6 +227,39 @@ read_feature_fields() {
   FEATURE_COMPONENT=$component
   FEATURE_TEAM=$team
   FEATURE_FIX_VERSION=$version
+}
+
+# Takeover: --label appends. Drop labels this skill owns (osac-ux, osac-ui,
+# customer, customer:*); the caller then applies FEATURE_LABELS. Other labels
+# stay. Returns 1 after warning on view/edit failure — caller continues.
+clear_feature_managed_labels() {
+  local key=$1 view err labs lab args=()
+  view=$(new_temp osac-jira-labels-view)
+  add_temp "$view"
+  err=$(new_temp osac-jira-labels-err)
+  add_temp "$err"
+  labs=$(new_temp osac-jira-labels-list)
+  add_temp "$labs"
+  if ! jira issue view "$key" --raw >"$view" 2>"$err"; then
+    echo "Could not read ${key} labels — managed-label clear skipped" >&2
+    cat "$err" >&2
+    return 1
+  fi
+  jq -r '.fields.labels[]? // empty' <"$view" >"$labs"
+  while IFS= read -r lab; do
+    [ -z "$lab" ] && continue
+    case "$lab" in
+      osac-ux|osac-ui|customer|customer:*)
+        args+=(--label "-${lab}")
+        ;;
+    esac
+  done <"$labs"
+  [ ${#args[@]} -eq 0 ] && return 0
+  if ! jira issue edit "$key" "${args[@]}" --no-input 2>"$err" </dev/null; then
+    echo "Feature managed-label clear failed for ${key} — continuing bootstrap" >&2
+    cat "$err" >&2
+    return 1
+  fi
 }
 ```
 
@@ -279,7 +340,11 @@ apply_feature_fix_version() {
   existing=${FEATURE_FIX_VERSION:-}
   if [ -n "$existing" ] \
     && [ "$(printf '%s' "$existing" | tr '[:upper:]' '[:lower:]')" = "backlog" ]; then
-    jira issue edit "$key" --fix-version "-${existing}" --no-input 2>>"$err" </dev/null || true
+    if ! jira issue edit "$key" --fix-version "-${existing}" --no-input 2>>"$err" </dev/null; then
+      echo "Could not remove Backlog fix version from ${key} — not appending ${version}" >&2
+      cat "$err" >&2
+      return 1
+    fi
   fi
   if ! jira issue edit "$key" --fix-version "$version" --no-input 2>"$err" </dev/null; then
     echo "Fix version edit failed for ${key} (${version}) — set manually:" >&2

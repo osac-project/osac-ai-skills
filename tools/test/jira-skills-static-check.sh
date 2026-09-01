@@ -88,9 +88,9 @@ test_osac_feature_takeover_and_derive() {
   local bash="${skill}/references/bash-patterns.md"
   local epic="${skill}/references/bootstrap-epic.md"
 
-  rg -q 'version: "0.3.0"' "$skill_md" \
-    || fail "osac-feature: SKILL.md metadata.version must be 0.3.0"
-  pass "osac-feature: version 0.3.0"
+  rg -q 'version: "0.3.1"' "$skill_md" \
+    || fail "osac-feature: SKILL.md metadata.version must be 0.3.1"
+  pass "osac-feature: version 0.3.1"
 
   rg -qi 'empty placeholder' "$skill_md" \
     || fail "osac-feature: SKILL.md must document takeover of empty placeholders"
@@ -114,7 +114,7 @@ test_osac_feature_takeover_and_derive() {
   pass "osac-feature: duplicate check calls assert_empty_placeholder"
 
   local fn
-  for fn in is_placeholder_description assert_empty_placeholder read_feature_fields; do
+  for fn in is_placeholder_description assert_empty_placeholder read_feature_fields feature_description_has_non_text_nodes clear_feature_managed_labels; do
     rg -q "${fn}()" "$bash" \
       || fail "bash-patterns.md missing ${fn}()"
   done
@@ -168,6 +168,55 @@ test_osac_feature_takeover_and_derive() {
   rg -qF '"to be determined"|"coming soon"' "$bash" \
     || fail 'is_placeholder_description must quote multi-word case patterns'
   pass "osac-feature: placeholder case patterns are quoted"
+
+  rg -qF 'feature_description_has_non_text_nodes' "$bash" \
+    || fail "bash-patterns.md must define feature_description_has_non_text_nodes"
+  rg -qF 'hardBreak' "$bash" \
+    || fail "feature_description_has_non_text_nodes must allow hardBreak as a text wrapper"
+  rg -qF 'non-text ADF nodes' "$bash" \
+    || fail "assert_empty_placeholder must reject non-text ADF nodes"
+  local adf_pred='
+    .fields.description |
+    if . == null then false
+    elif type == "string" then false
+    else
+      any(
+        .. | objects | .type | strings
+        | select(. != "doc" and . != "paragraph" and . != "text" and . != "hardBreak")
+      )
+    end'
+  printf '%s' '{"fields":{"description":{"type":"doc","content":[{"type":"media"}]}}}' \
+    | jq -e "$adf_pred" >/dev/null \
+    || fail "ADF predicate must treat media-only description as non-text"
+  if printf '%s' '{"fields":{"description":{"type":"doc","content":[]}}}' \
+    | jq -e "$adf_pred" >/dev/null; then
+    fail "ADF predicate must accept an empty doc as text-only"
+  fi
+  if printf '%s' '{"fields":{"description":"TBD"}}' \
+    | jq -e "$adf_pred" >/dev/null; then
+    fail "ADF predicate must accept a plain-string description"
+  fi
+  pass "osac-feature: non-text ADF is not a placeholder"
+
+  if rg -nF 'fix-version "-${existing}"' "$bash" | rg -q '\|\| true'; then
+    fail "apply_feature_fix_version must not ignore Backlog-remove failure with || true"
+  fi
+  rg -qF 'not appending' "$bash" \
+    || fail "apply_feature_fix_version must stop before append when Backlog remove fails"
+  pass "osac-feature: Backlog remove failure does not append"
+
+  rg -qF 'clear_feature_managed_labels' "$bash" \
+    || fail "bash-patterns.md must define clear_feature_managed_labels"
+  rg -qF 'clear_feature_managed_labels "$KEY"' "$body" \
+    || fail "feature-body-template.md takeover must call clear_feature_managed_labels"
+  rg -qF 'customer:*' "$bash" \
+    || fail "clear_feature_managed_labels must match customer:* labels"
+  pass "osac-feature: takeover reconciles managed labels"
+
+  if rg -qF 'BOOTSTRAP_FIX_VERSION="${FIX_VERSION:-backlog}"' "$body"; then
+    fail "takeover re-read failure must not copy unapplied FIX_VERSION onto the epic"
+  fi
+  pass "osac-feature: re-read failure does not copy unapplied FIX_VERSION"
 
   rg -qi 'the confirm gate \(not after\)' "$skill_md" \
     || fail "SKILL.md must run same-summary duplicate check before the confirm gate"

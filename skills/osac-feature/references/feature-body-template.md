@@ -90,7 +90,8 @@ must stop here — never overwrite.
 
 Write `$BODY`, then create or take over. Use patterns from
 [bash-patterns.md](bash-patterns.md) (`new_temp`, `require_osac_key`,
-`assert_empty_placeholder`, `read_feature_fields`):
+`assert_empty_placeholder`, `read_feature_fields`,
+`clear_feature_managed_labels`):
 
 ```bash
 BODY=$(new_temp osac-feature-body)
@@ -114,6 +115,9 @@ if [ -n "${KEY:-}" ]; then
     cat "$ERR" >&2
     exit 1
   fi
+  # --label appends. Drop skill-owned labels first so UI=no / no-customer
+  # does not leave osac-ux/osac-ui/customer/customer:* from a prior run.
+  clear_feature_managed_labels "$KEY" || true
   if [ ${#FEATURE_LABELS[@]} -gt 0 ]; then
     if ! jira issue edit "$KEY" "${FEATURE_LABELS[@]}" --no-input 2>>"$ERR" </dev/null; then
       echo "Feature label edit failed for ${KEY} — continuing bootstrap" >&2
@@ -141,7 +145,14 @@ if [ -n "${KEY:-}" ]; then
     fi
   else
     echo "Could not re-read ${KEY} after body edit — skipping Component/Team/Fix version writes" >&2
-    BOOTSTRAP_FIX_VERSION="${FIX_VERSION:-backlog}"
+    # FEATURE_FIX_VERSION is the last known applied value (from gather). Do
+    # not copy a newly selected FIX_VERSION the Feature never received.
+    if [ -n "${FEATURE_FIX_VERSION:-}" ] \
+      && [ "$(printf '%s' "$FEATURE_FIX_VERSION" | tr '[:upper:]' '[:lower:]')" != "backlog" ]; then
+      BOOTSTRAP_FIX_VERSION="$FEATURE_FIX_VERSION"
+    else
+      BOOTSTRAP_FIX_VERSION="backlog"
+    fi
   fi
 else
   jira issue create -t Feature --project OSAC \
