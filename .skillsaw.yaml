@@ -389,6 +389,8 @@ exclude:
   - ".ai-workflows/**"
   # Local workflow artifacts
   - ".artifacts/**"
+  # Generated GitHub Pages catalog (make docs)
+  - "docs/**"
 
 # Treat warnings as errors
 strict: true

@@ -34,8 +34,10 @@ done
 pass "catalog lists ${#skill_names[@]} skills"
 
 if [[ -n $(git ls-files -- docs/) ]]; then
-  dirty=$(git status --porcelain -- docs/)
-  [[ -z "$dirty" ]] || fail "docs/ dirty after make docs:"$'\n'"$dirty"
+  git diff --exit-code -- docs/ \
+    || fail "make docs changed staged/committed docs/ (catalog should be generator output only)"
+  untracked=$(git ls-files --others --exclude-standard -- docs/)
+  [[ -z "$untracked" ]] || fail "untracked files under docs/: $untracked"
   pass "docs/ matches git after regen"
 else
   pass "docs/ not tracked yet; skipping idempotency check"
