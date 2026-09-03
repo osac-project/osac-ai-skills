@@ -428,9 +428,79 @@ footer a { color: var(--primary); }
   ],
   "standalone_skills": [
     {
-      "name": "report-bug",
-      "description": "Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says 'report a bug', 'file a bug', 'log a bug', 'open a bug ticket', or wants to track a bug without immediately writing a fix.",
-      "description_html": "Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says &#x27;report a bug&#x27;, &#x27;file a bug&#x27;, &#x27;log a bug&#x27;, &#x27;open a bug ticket&#x27;, or wants to track a bug without immediately writing a fix."
+      "name": "ponytail-review",
+      "description": "Code review focused exclusively on over-engineering and duplication. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility, and non-trivial duplicated logic. One line per finding: location, what to cut or de-duplicate, what replaces it. Use when the user says \"review for over-engineering\", \"what can we delete\", \"is this over-engineered\", \"simplify review\", or invokes /ponytail-review. Also runs as one of `create-pr`'s config-driven Step 4 pre-flight reviewers (see `skills/create-pr/references/reviewer-config.md`) — complements correctness/security/performance review, this one only hunts complexity and duplication. Adapted from https://github.com/DietrichGebert/ponytail.\n",
+      "description_html": "Code review focused exclusively on over-engineering and duplication. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility, and non-trivial duplicated logic. One line per finding: location, what to cut or de-duplicate, what replaces it. Use when the user says &quot;review for over-engineering&quot;, &quot;what can we delete&quot;, &quot;is this over-engineered&quot;, &quot;simplify review&quot;, or invokes /ponytail-review. Also runs as one of \u003ccode\u003ecreate-pr\u003c/code\u003e&#x27;s config-driven Step 4 pre-flight reviewers (see \u003ccode\u003eskills/create-pr/references/reviewer-config.md\u003c/code\u003e) — complements correctness/security/performance review, this one only hunts complexity and duplication. Adapted from https://github.com/DietrichGebert/ponytail."
+    },
+    {
+      "name": "generate-status-report",
+      "description": "Generate project status reports from Jira issues using jira-cli. When an agent needs to: (1) Create a status report for a project, (2) Summarize project progress or updates, (3) Generate weekly/daily reports from Jira, or (4) Analyze project blockers and completion. Queries Jira issues, categorizes by status/priority, and creates formatted reports.",
+      "description_html": "Generate project status reports from Jira issues using jira-cli. When an agent needs to: (1) Create a status report for a project, (2) Summarize project progress or updates, (3) Generate weekly/daily reports from Jira, or (4) Analyze project blockers and completion. Queries Jira issues, categorizes by status/priority, and creates formatted reports."
+    },
+    {
+      "name": "performance-review",
+      "description": "Performance self-review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for O(n)/O(n^2) hot-path issues, memory/goroutine leaks, and inefficient patterns across OSAC's Go services and Ansible/Python tooling. Use standalone before opening a PR, via review-gate (which pairs it with security-review), or via create-pr's config-driven pre-flight gate, which invokes it directly.",
+      "description_html": "Performance self-review of a branch&#x27;s changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for O(n)/O(n^2) hot-path issues, memory/goroutine leaks, and inefficient patterns across OSAC&#x27;s Go services and Ansible/Python tooling. Use standalone before opening a PR, via review-gate (which pairs it with security-review), or via create-pr&#x27;s config-driven pre-flight gate, which invokes it directly."
+    },
+    {
+      "name": "milestone-scope",
+      "description": "Scope and readiness assessment for an OSAC milestone — features grouped by use case, epic breakdown with statuses, and gap analysis. Use when asked to report on a version, milestone, or release scope.",
+      "description_html": "Scope and readiness assessment for an OSAC milestone — features grouped by use case, epic breakdown with statuses, and gap analysis. Use when asked to report on a version, milestone, or release scope."
+    },
+    {
+      "name": "browser-demo-recording",
+      "description": "Record browser-based UI demos using Playwright and edit the video with ffmpeg (speed up, trim, concatenate, add title cards). Use when creating demo recordings of web UIs — Enclave Wizard, osac-ui, OpenShift console, or any browser-based workflow.",
+      "description_html": "Record browser-based UI demos using Playwright and edit the video with ffmpeg (speed up, trim, concatenate, add title cards). Use when creating demo recordings of web UIs — Enclave Wizard, osac-ui, OpenShift console, or any browser-based workflow."
+    },
+    {
+      "name": "jira-task-management",
+      "description": "Manage Jira issues on Red Hat Jira (redhat.atlassian.net) using jira-cli. Use this skill whenever the user mentions Jira tickets, issues, bugs, tasks, epics, sprints, or wants to create/update/search work items. Also use when the user references issue keys like OSAC-*, NVIDIA-*, RHEL-*, asks about task status, or wants to track work.",
+      "description_html": "Manage Jira issues on Red Hat Jira (redhat.atlassian.net) using jira-cli. Use this skill whenever the user mentions Jira tickets, issues, bugs, tasks, epics, sprints, or wants to create/update/search work items. Also use when the user references issue keys like OSAC-\u003cem\u003e, NVIDIA-\u003c/em\u003e, RHEL-*, asks about task status, or wants to track work."
+    },
+    {
+      "name": "create-pr",
+      "description": "Create a PR on an OSAC component repo (including the osac mono-repo, which may need per-component validation for multiple touched components in one pass) using the fork-based workflow. Runs repo-specific validation (build, test, lint), pushes to the developer's push remote, and opens a PR against the upstream repo with proper title format. Use when the user says 'create PR', 'open PR', 'submit for review', 'push and create PR', or when finishing a feature branch.",
+      "description_html": "Create a PR on an OSAC component repo (including the osac mono-repo, which may need per-component validation for multiple touched components in one pass) using the fork-based workflow. Runs repo-specific validation (build, test, lint), pushes to the developer&#x27;s push remote, and opens a PR against the upstream repo with proper title format. Use when the user says &#x27;create PR&#x27;, &#x27;open PR&#x27;, &#x27;submit for review&#x27;, &#x27;push and create PR&#x27;, or when finishing a feature branch."
+    },
+    {
+      "name": "quick-fix",
+      "description": "Unattended bug fix — creates a Jira bug, fixes it in the background, posts a PR, and moves the ticket to Code Review. Use when a bug is found during the current session and needs an immediate fix without interactive phases. For attended, phase-by-phase bug investigation, use /bugfix instead.",
+      "description_html": "Unattended bug fix — creates a Jira bug, fixes it in the background, posts a PR, and moves the ticket to Code Review. Use when a bug is found during the current session and needs an immediate fix without interactive phases. For attended, phase-by-phase bug investigation, use /bugfix instead."
+    },
+    {
+      "name": "osac-cluster",
+      "description": "Boot, manage, or troubleshoot OSAC development clusters using cluster-tool.",
+      "description_html": "Boot, manage, or troubleshoot OSAC development clusters using cluster-tool."
+    },
+    {
+      "name": "release-plan",
+      "description": "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap.",
+      "description_html": "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap."
+    },
+    {
+      "name": "osac-feature",
+      "description": "Create Feature issues in the OSAC Jira project, or complete empty placeholder Features. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.",
+      "description_html": "Create Feature issues in the OSAC Jira project, or complete empty placeholder Features. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC."
+    },
+    {
+      "name": "osac-demo-recording",
+      "description": "Use when creating asciinema recordings of OSAC REST/gRPC API workflows for documentation or demos",
+      "description_html": "Use when creating asciinema recordings of OSAC REST/gRPC API workflows for documentation or demos"
+    },
+    {
+      "name": "capture-tasks-from-meeting-notes",
+      "description": "Analyze meeting notes to find action items and create Jira tasks for assigned work using jira-cli. When an agent needs to: (1) Create Jira tasks or tickets from meeting notes, (2) Extract or find action items from notes, (3) Parse meeting notes for assigned tasks, or (4) Analyze notes and generate tasks for team members.",
+      "description_html": "Analyze meeting notes to find action items and create Jira tasks for assigned work using jira-cli. When an agent needs to: (1) Create Jira tasks or tickets from meeting notes, (2) Extract or find action items from notes, (3) Parse meeting notes for assigned tasks, or (4) Analyze notes and generate tasks for team members."
+    },
+    {
+      "name": "pre-pr-review",
+      "description": "Use when the user invokes /pre-pr-review, wants a pre-flight review without creating a PR, or wants create-pr Step 4's config-driven reviewers run in isolation (no repo build/lint/test, coverage, push, or gh pr create). Orchestrates skills/.config/create-pr-reviewers.yaml as parallel subagents. Distinct from /review-gate (sequential, different output, includes dirty tree).\n",
+      "description_html": "Use when the user invokes /pre-pr-review, wants a pre-flight review without creating a PR, or wants create-pr Step 4&#x27;s config-driven reviewers run in isolation (no repo build/lint/test, coverage, push, or gh pr create). Orchestrates skills/.config/create-pr-reviewers.yaml as parallel subagents. Distinct from /review-gate (sequential, different output, includes dirty tree)."
+    },
+    {
+      "name": "presentation",
+      "description": "Create Red Hat-branded Marp presentations (slide decks). Produces a self-contained Marp markdown deck using the shared redhat theme, renders to HTML and PPTX. Encodes the hard-won rules for image paths and PPTX export so layouts and assets survive conversion.",
+      "description_html": "Create Red Hat-branded Marp presentations (slide decks). Produces a self-contained Marp markdown deck using the shared redhat theme, renders to HTML and PPTX. Encodes the hard-won rules for image paths and PPTX export so layouts and assets survive conversion."
     },
     {
       "name": "test-plan-score",
@@ -443,89 +513,9 @@ footer a { color: var(--primary); }
       "description_html": "Create or edit GitHub Actions workflow files (.github/workflows/*.yaml) with security and maintainability best practices applied from the start, instead of discovering them one CodeRabbit review round at a time. Covers least-privilege permissions, SHA-pinned actions, injection-safe env-var handling, semver/tag validation, force-push-safe release gating, and extracting shared bash into scripts. Use when creating a new workflow, adding a job/step to an existing one, wiring up a workflow_run gate, or setting up any tag/release automation."
     },
     {
-      "name": "performance-review",
-      "description": "Performance self-review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for O(n)/O(n^2) hot-path issues, memory/goroutine leaks, and inefficient patterns across OSAC's Go services and Ansible/Python tooling. Use standalone before opening a PR, via review-gate (which pairs it with security-review), or via create-pr's config-driven pre-flight gate, which invokes it directly.",
-      "description_html": "Performance self-review of a branch&#x27;s changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for O(n)/O(n^2) hot-path issues, memory/goroutine leaks, and inefficient patterns across OSAC&#x27;s Go services and Ansible/Python tooling. Use standalone before opening a PR, via review-gate (which pairs it with security-review), or via create-pr&#x27;s config-driven pre-flight gate, which invokes it directly."
-    },
-    {
-      "name": "release-plan",
-      "description": "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap.",
-      "description_html": "Generate a forward-looking release plan for an OSAC version — shows what the platform will deliver, cumulative capabilities across all prior versions, customer requirements coverage, and use-case cards. Use when asked for a release plan, developer preview plan, or version roadmap."
-    },
-    {
-      "name": "osac-feature",
-      "description": "Create Feature issues in the OSAC Jira project. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC.",
-      "description_html": "Create Feature issues in the OSAC Jira project. Use when the user wants to create a Feature, enhancement, or new capability request for OSAC."
-    },
-    {
-      "name": "capture-tasks-from-meeting-notes",
-      "description": "Analyze meeting notes to find action items and create Jira tasks for assigned work using jira-cli. When an agent needs to: (1) Create Jira tasks or tickets from meeting notes, (2) Extract or find action items from notes, (3) Parse meeting notes for assigned tasks, or (4) Analyze notes and generate tasks for team members.",
-      "description_html": "Analyze meeting notes to find action items and create Jira tasks for assigned work using jira-cli. When an agent needs to: (1) Create Jira tasks or tickets from meeting notes, (2) Extract or find action items from notes, (3) Parse meeting notes for assigned tasks, or (4) Analyze notes and generate tasks for team members."
-    },
-    {
-      "name": "test-plan-review",
-      "description": "Completeness reviewer for ai-workflows testplans. Checks requirement\ncoverage, test case depth, structural consistency, and gap analysis.\nRun after scoring flags issues, or before publishing a testplan.\n\nTrigger when user says \"review test plan\", \"check test completeness\",\n\"are all tests covered\", or after a Revise/Rework verdict.\n",
-      "description_html": "\u003cp\u003eCompleteness reviewer for ai-workflows testplans. Checks requirement\u003cbr\u003ecoverage, test case depth, structural consistency, and gap analysis.\u003cbr\u003eRun after scoring flags issues, or before publishing a testplan.\u003c/p\u003e\u003cp\u003eTrigger when user says &quot;review test plan&quot;, &quot;check test completeness&quot;,\u003cbr\u003e&quot;are all tests covered&quot;, or after a Revise/Rework verdict.\u003c/p\u003e"
-    },
-    {
-      "name": "browser-demo-recording",
-      "description": "Record browser-based UI demos using Playwright and edit the video with ffmpeg (speed up, trim, concatenate, add title cards). Use when creating demo recordings of web UIs — Enclave Wizard, osac-ui, OpenShift console, or any browser-based workflow.",
-      "description_html": "Record browser-based UI demos using Playwright and edit the video with ffmpeg (speed up, trim, concatenate, add title cards). Use when creating demo recordings of web UIs — Enclave Wizard, osac-ui, OpenShift console, or any browser-based workflow."
-    },
-    {
-      "name": "osac-demo-recording",
-      "description": "Use when creating asciinema recordings of OSAC REST/gRPC API workflows for documentation or demos",
-      "description_html": "Use when creating asciinema recordings of OSAC REST/gRPC API workflows for documentation or demos"
-    },
-    {
-      "name": "milestone-scope",
-      "description": "Scope and readiness assessment for an OSAC milestone — features grouped by use case, epic breakdown with statuses, and gap analysis. Use when asked to report on a version, milestone, or release scope.",
-      "description_html": "Scope and readiness assessment for an OSAC milestone — features grouped by use case, epic breakdown with statuses, and gap analysis. Use when asked to report on a version, milestone, or release scope."
-    },
-    {
-      "name": "generate-status-report",
-      "description": "Generate project status reports from Jira issues using jira-cli. When an agent needs to: (1) Create a status report for a project, (2) Summarize project progress or updates, (3) Generate weekly/daily reports from Jira, or (4) Analyze project blockers and completion. Queries Jira issues, categorizes by status/priority, and creates formatted reports.",
-      "description_html": "Generate project status reports from Jira issues using jira-cli. When an agent needs to: (1) Create a status report for a project, (2) Summarize project progress or updates, (3) Generate weekly/daily reports from Jira, or (4) Analyze project blockers and completion. Queries Jira issues, categorizes by status/priority, and creates formatted reports."
-    },
-    {
-      "name": "jira-task-management",
-      "description": "Manage Jira issues on Red Hat Jira (redhat.atlassian.net) using jira-cli. Use this skill whenever the user mentions Jira tickets, issues, bugs, tasks, epics, sprints, or wants to create/update/search work items. Also use when the user references issue keys like OSAC-*, NVIDIA-*, RHEL-*, asks about task status, or wants to track work.",
-      "description_html": "Manage Jira issues on Red Hat Jira (redhat.atlassian.net) using jira-cli. Use this skill whenever the user mentions Jira tickets, issues, bugs, tasks, epics, sprints, or wants to create/update/search work items. Also use when the user references issue keys like OSAC-\u003cem\u003e, NVIDIA-\u003c/em\u003e, RHEL-*, asks about task status, or wants to track work."
-    },
-    {
-      "name": "osac-cluster",
-      "description": "Boot, manage, or troubleshoot OSAC development clusters using cluster-tool.",
-      "description_html": "Boot, manage, or troubleshoot OSAC development clusters using cluster-tool."
-    },
-    {
-      "name": "quick-fix",
-      "description": "Unattended bug fix — creates a Jira bug, fixes it in the background, posts a PR, and moves the ticket to Code Review. Use when a bug is found during the current session and needs an immediate fix without interactive phases. For attended, phase-by-phase bug investigation, use /bugfix instead.",
-      "description_html": "Unattended bug fix — creates a Jira bug, fixes it in the background, posts a PR, and moves the ticket to Code Review. Use when a bug is found during the current session and needs an immediate fix without interactive phases. For attended, phase-by-phase bug investigation, use /bugfix instead."
-    },
-    {
-      "name": "pre-pr-review",
-      "description": "Use when the user invokes /pre-pr-review, wants a pre-flight review without creating a PR, or wants create-pr Step 4's config-driven reviewers run in isolation (no repo build/lint/test, coverage, push, or gh pr create). Orchestrates skills/.config/create-pr-reviewers.yaml as parallel subagents. Distinct from /review-gate (sequential, different output, includes dirty tree).\n",
-      "description_html": "Use when the user invokes /pre-pr-review, wants a pre-flight review without creating a PR, or wants create-pr Step 4&#x27;s config-driven reviewers run in isolation (no repo build/lint/test, coverage, push, or gh pr create). Orchestrates skills/.config/create-pr-reviewers.yaml as parallel subagents. Distinct from /review-gate (sequential, different output, includes dirty tree)."
-    },
-    {
-      "name": "ponytail-review",
-      "description": "Code review focused exclusively on over-engineering and duplication. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility, and non-trivial duplicated logic. One line per finding: location, what to cut or de-duplicate, what replaces it. Use when the user says \"review for over-engineering\", \"what can we delete\", \"is this over-engineered\", \"simplify review\", or invokes /ponytail-review. Also runs as one of `create-pr`'s config-driven Step 4 pre-flight reviewers (see `skills/create-pr/references/reviewer-config.md`) — complements correctness/security/performance review, this one only hunts complexity and duplication. Adapted from https://github.com/DietrichGebert/ponytail.\n",
-      "description_html": "Code review focused exclusively on over-engineering and duplication. Finds what to delete: reinvented standard library, unneeded dependencies, speculative abstractions, dead flexibility, and non-trivial duplicated logic. One line per finding: location, what to cut or de-duplicate, what replaces it. Use when the user says &quot;review for over-engineering&quot;, &quot;what can we delete&quot;, &quot;is this over-engineered&quot;, &quot;simplify review&quot;, or invokes /ponytail-review. Also runs as one of \u003ccode\u003ecreate-pr\u003c/code\u003e&#x27;s config-driven Step 4 pre-flight reviewers (see \u003ccode\u003eskills/create-pr/references/reviewer-config.md\u003c/code\u003e) — complements correctness/security/performance review, this one only hunts complexity and duplication. Adapted from https://github.com/DietrichGebert/ponytail."
-    },
-    {
-      "name": "design-review",
-      "description": "Review an OSAC design document against template requirements, architectural patterns,\nand historical reviewer expectations. Use when reviewing a design PR, preparing a design for\nsubmission, or self-reviewing a draft before requesting feedback. Produces rubric scores\nand structured findings with severity levels and actionable suggestions.\n\nAlso trigger when user says \"review this design\", \"check this design document\",\n\"is this design ready\", \"review PR on enhancement-proposals\", or references a PR\non osac-project/enhancement-proposals.\n",
-      "description_html": "\u003cp\u003eReview an OSAC design document against template requirements, architectural patterns,\u003cbr\u003eand historical reviewer expectations. Use when reviewing a design PR, preparing a design for\u003cbr\u003esubmission, or self-reviewing a draft before requesting feedback. Produces rubric scores\u003cbr\u003eand structured findings with severity levels and actionable suggestions.\u003c/p\u003e\u003cp\u003eAlso trigger when user says &quot;review this design&quot;, &quot;check this design document&quot;,\u003cbr\u003e&quot;is this design ready&quot;, &quot;review PR on enhancement-proposals&quot;, or references a PR\u003cbr\u003eon osac-project/enhancement-proposals.\u003c/p\u003e"
-    },
-    {
-      "name": "prd-review",
-      "description": "Review an OSAC PRD against template requirements, OSAC feature dimensions,\npersona coverage, and testability standards. Use when reviewing a PRD PR,\npreparing a PRD for submission, or self-reviewing before /prd:publish.\nProduces structured findings with rubric scores and actionable suggestions.\n\nAlso trigger when user says \"review this PRD\", \"check this PRD\",\n\"is this PRD ready\", \"review the requirements doc\", or references a PRD\nfile or PR.\n",
-      "description_html": "\u003cp\u003eReview an OSAC PRD against template requirements, OSAC feature dimensions,\u003cbr\u003epersona coverage, and testability standards. Use when reviewing a PRD PR,\u003cbr\u003epreparing a PRD for submission, or self-reviewing before /prd:publish.\u003cbr\u003eProduces structured findings with rubric scores and actionable suggestions.\u003c/p\u003e\u003cp\u003eAlso trigger when user says &quot;review this PRD&quot;, &quot;check this PRD&quot;,\u003cbr\u003e&quot;is this PRD ready&quot;, &quot;review the requirements doc&quot;, or references a PRD\u003cbr\u003efile or PR.\u003c/p\u003e"
-    },
-    {
-      "name": "create-pr",
-      "description": "Create a PR on an OSAC component repo (including the osac mono-repo, which may need per-component validation for multiple touched components in one pass) using the fork-based workflow. Runs repo-specific validation (build, test, lint), pushes to the developer's push remote, and opens a PR against the upstream repo with proper title format. Use when the user says 'create PR', 'open PR', 'submit for review', 'push and create PR', or when finishing a feature branch.",
-      "description_html": "Create a PR on an OSAC component repo (including the osac mono-repo, which may need per-component validation for multiple touched components in one pass) using the fork-based workflow. Runs repo-specific validation (build, test, lint), pushes to the developer&#x27;s push remote, and opens a PR against the upstream repo with proper title format. Use when the user says &#x27;create PR&#x27;, &#x27;open PR&#x27;, &#x27;submit for review&#x27;, &#x27;push and create PR&#x27;, or when finishing a feature branch."
+      "name": "security-review",
+      "description": "Adversarial security review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for RBAC/authz issues, injection, data exposure, permission-manifest widening, embedded secrets, prompt-injection patterns, and OSAC-specific policy violations (tenant isolation, multi-tenancy). Use standalone before opening a PR, via review-gate (which pairs it with performance-review), or via create-pr's config-driven pre-flight gate, which invokes it directly. Adapted from a production multi-agent review pipeline's security dimension.",
+      "description_html": "Adversarial security review of a branch&#x27;s changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for RBAC/authz issues, injection, data exposure, permission-manifest widening, embedded secrets, prompt-injection patterns, and OSAC-specific policy violations (tenant isolation, multi-tenancy). Use standalone before opening a PR, via review-gate (which pairs it with performance-review), or via create-pr&#x27;s config-driven pre-flight gate, which invokes it directly. Adapted from a production multi-agent review pipeline&#x27;s security dimension."
     },
     {
       "name": "review-gate",
@@ -533,14 +523,24 @@ footer a { color: var(--primary); }
       "description_html": "Local pre-flight review gate that runs performance and security reviews against everything this branch has changed since diverging from a base ref (main by default, via merge-base — not a raw diff against the base&#x27;s current tip) before PR submission, covering committed, staged, and unstaged changes uniformly. Orchestrates the performance-review and security-review skills in sequence and aggregates their findings into one actionable report. Use standalone before opening a PR — create-pr&#x27;s own Step 4 pre-flight gate invokes reviewers directly per its config-driven list (skills/.config/create-pr-reviewers.yaml) and does not call this skill. Blocks on critical/important findings from either reviewer."
     },
     {
-      "name": "presentation",
-      "description": "Create Red Hat-branded Marp presentations (slide decks). Produces a self-contained Marp markdown deck using the shared redhat theme, renders to HTML and PPTX. Encodes the hard-won rules for image paths and PPTX export so layouts and assets survive conversion.",
-      "description_html": "Create Red Hat-branded Marp presentations (slide decks). Produces a self-contained Marp markdown deck using the shared redhat theme, renders to HTML and PPTX. Encodes the hard-won rules for image paths and PPTX export so layouts and assets survive conversion."
+      "name": "prd-review",
+      "description": "Review an OSAC PRD against template requirements, OSAC feature dimensions,\npersona coverage, and testability standards. Use when reviewing a PRD PR,\npreparing a PRD for submission, or self-reviewing before /prd:publish.\nProduces structured findings with rubric scores and actionable suggestions.\n\nAlso trigger when user says \"review this PRD\", \"check this PRD\",\n\"is this PRD ready\", \"review the requirements doc\", or references a PRD\nfile or PR.\n",
+      "description_html": "\u003cp\u003eReview an OSAC PRD against template requirements, OSAC feature dimensions,\u003cbr\u003epersona coverage, and testability standards. Use when reviewing a PRD PR,\u003cbr\u003epreparing a PRD for submission, or self-reviewing before /prd:publish.\u003cbr\u003eProduces structured findings with rubric scores and actionable suggestions.\u003c/p\u003e\u003cp\u003eAlso trigger when user says &quot;review this PRD&quot;, &quot;check this PRD&quot;,\u003cbr\u003e&quot;is this PRD ready&quot;, &quot;review the requirements doc&quot;, or references a PRD\u003cbr\u003efile or PR.\u003c/p\u003e"
     },
     {
-      "name": "security-review",
-      "description": "Adversarial security review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for RBAC/authz issues, injection, data exposure, permission-manifest widening, embedded secrets, prompt-injection patterns, and OSAC-specific policy violations (tenant isolation, multi-tenancy). Use standalone before opening a PR, via review-gate (which pairs it with performance-review), or via create-pr's config-driven pre-flight gate, which invokes it directly. Adapted from a production multi-agent review pipeline's security dimension.",
-      "description_html": "Adversarial security review of a branch&#x27;s changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for RBAC/authz issues, injection, data exposure, permission-manifest widening, embedded secrets, prompt-injection patterns, and OSAC-specific policy violations (tenant isolation, multi-tenancy). Use standalone before opening a PR, via review-gate (which pairs it with performance-review), or via create-pr&#x27;s config-driven pre-flight gate, which invokes it directly. Adapted from a production multi-agent review pipeline&#x27;s security dimension."
+      "name": "report-bug",
+      "description": "Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says 'report a bug', 'file a bug', 'log a bug', 'open a bug ticket', or wants to track a bug without immediately writing a fix.",
+      "description_html": "Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says &#x27;report a bug&#x27;, &#x27;file a bug&#x27;, &#x27;log a bug&#x27;, &#x27;open a bug ticket&#x27;, or wants to track a bug without immediately writing a fix."
+    },
+    {
+      "name": "design-review",
+      "description": "Review an OSAC design document against template requirements, architectural patterns,\nand historical reviewer expectations. Use when reviewing a design PR, preparing a design for\nsubmission, or self-reviewing a draft before requesting feedback. Produces rubric scores\nand structured findings with severity levels and actionable suggestions.\n\nAlso trigger when user says \"review this design\", \"check this design document\",\n\"is this design ready\", \"review PR on enhancement-proposals\", or references a PR\non osac-project/enhancement-proposals.\n",
+      "description_html": "\u003cp\u003eReview an OSAC design document against template requirements, architectural patterns,\u003cbr\u003eand historical reviewer expectations. Use when reviewing a design PR, preparing a design for\u003cbr\u003esubmission, or self-reviewing a draft before requesting feedback. Produces rubric scores\u003cbr\u003eand structured findings with severity levels and actionable suggestions.\u003c/p\u003e\u003cp\u003eAlso trigger when user says &quot;review this design&quot;, &quot;check this design document&quot;,\u003cbr\u003e&quot;is this design ready&quot;, &quot;review PR on enhancement-proposals&quot;, or references a PR\u003cbr\u003eon osac-project/enhancement-proposals.\u003c/p\u003e"
+    },
+    {
+      "name": "test-plan-review",
+      "description": "Completeness reviewer for ai-workflows testplans. Checks requirement\ncoverage, test case depth, structural consistency, and gap analysis.\nRun after scoring flags issues, or before publishing a testplan.\n\nTrigger when user says \"review test plan\", \"check test completeness\",\n\"are all tests covered\", or after a Revise/Rework verdict.\n",
+      "description_html": "\u003cp\u003eCompleteness reviewer for ai-workflows testplans. Checks requirement\u003cbr\u003ecoverage, test case depth, structural consistency, and gap analysis.\u003cbr\u003eRun after scoring flags issues, or before publishing a testplan.\u003c/p\u003e\u003cp\u003eTrigger when user says &quot;review test plan&quot;, &quot;check test completeness&quot;,\u003cbr\u003e&quot;are all tests covered&quot;, or after a Revise/Rework verdict.\u003c/p\u003e"
     }
   ]
 };
