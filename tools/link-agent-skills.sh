@@ -64,7 +64,6 @@ OSAC_SKILLS=(
   osac-cluster
   osac-demo-recording
   osac-feature
-  osac-release
   performance-review
   prd-review
   pre-pr-review

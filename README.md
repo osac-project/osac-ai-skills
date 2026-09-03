@@ -173,7 +173,7 @@ per-consumer copy to keep in sync.
 
 - **`tools/resolve-remotes.sh`** — detects which git remote points at the
   `osac-project` org (upstream) vs. the developer's fork (push target).
-  Consumed by `create-pr` and `osac-release`.
+  Consumed by `create-pr`.
 - **`tools/jira-safe-create.sh`** — temp-file/cleanup and Jira-credential
   helpers (`new_temp`/`add_temp`, `jira_login`/`jira_token`) for the safe
   `jira issue create` pattern. Consumed by `jira-task-management`,
