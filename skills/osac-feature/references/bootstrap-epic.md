@@ -1,14 +1,28 @@
 # Create bootstrap epic
 
-**Read this file after Feature create** (fix version set when not backlog; assign if requested).
+**Read this file after Feature create or takeover** (fix version set when not
+backlog; assign if requested).
 
 **Requires [bash-patterns.md](bash-patterns.md) sourced first** — helpers (`collect_keys_from_jql`,
-`require_osac_key`, `new_temp`, `apply_bootstrap_epic_metadata`) must already be defined.
+`require_osac_key`, `new_temp`, `read_feature_fields`, `apply_bootstrap_epic_metadata`) must already be defined.
 
-After the Feature is created, fix version is set (when not backlog), and
-optionally assigned, create a bootstrap epic under the Feature. Use
+After the Feature exists, resolve Component and Team from the Feature (source
+of truth), falling back to the in-memory values only when the Feature field is
+empty. Then create a bootstrap epic under the Feature. Use
 `jira issue create -t Epic` — **not** `jira epic create`
 (that subcommand has no parent flag).
+
+```bash
+if read_feature_fields "$KEY"; then
+  BOOTSTRAP_COMPONENT="${FEATURE_COMPONENT:-${COMPONENT:-}}"
+  BOOTSTRAP_TEAM="${FEATURE_TEAM:-${TEAM:-}}"
+else
+  echo "Could not read ${KEY} for epic Component/Team — using in-memory values" >&2
+  BOOTSTRAP_COMPONENT="${COMPONENT:-}"
+  BOOTSTRAP_TEAM="${TEAM:-}"
+fi
+TEAM="$BOOTSTRAP_TEAM"
+```
 
 Set `EPIC_SUMMARY="${FEATURE_SUMMARY} - Bootstrap"` for searches and create.
 
@@ -72,7 +86,7 @@ if [ -z "${EPIC_KEY:-}" ]; then
   jira issue create -t Epic --project OSAC \
     -s "${EPIC_SUMMARY}" \
     -b "Documentation work gates for ${KEY}. These tasks track drafting, submitting, and merging planning documents — not implementation." \
-    --component "${COMPONENT}" \
+    --component "${BOOTSTRAP_COMPONENT}" \
     $EPIC_LABEL_FLAGS --no-input --raw >"$OUT" 2>"$ERR" </dev/null
 
   EPIC_KEY=$(jq -r '.key // empty' "$OUT")
@@ -148,11 +162,11 @@ Do not create bootstrap tasks.
 
 ## Apply bootstrap metadata
 
-Label + copied fix version (when not backlog) + copied team (when the epic
-doesn't already have one):
+Label + copied fix version (when not backlog) + copied team and component
+(when the epic doesn't already have them). Pass the Feature-derived team:
 
 ```bash
-apply_bootstrap_epic_metadata "$EPIC_KEY" "$KEY" "$BOOTSTRAP_FIX_VERSION" "$TEAM" "$REQUIRES_UI"
+apply_bootstrap_epic_metadata "$EPIC_KEY" "$KEY" "$BOOTSTRAP_FIX_VERSION" "$BOOTSTRAP_TEAM" "$REQUIRES_UI"
 ```
 
 Run after parent verify succeeds — including when reusing an epic from duplicate search.

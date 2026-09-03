@@ -87,6 +87,198 @@ collect_keys_from_jql() {
 }
 ```
 
+## Feature placeholder and field helpers
+
+Flatten a Feature's description and fields for takeover. ADF `type` names
+are strings too — extract only `type=text` nodes, or a whole-description
+token list would never match `tbd`. Flattened text of `""` is not enough:
+ADF that still has other node types (media, status, mention, …) is a real
+description. Walk `content` only — `marks` (strong, link, …) are formatting.
+Allowed wrappers when the text is empty or TBD-like: `doc`,
+`paragraph`, `text`, `hardBreak`.
+
+```bash
+# stdin: jira issue view --raw JSON. One trimmed line of description text.
+feature_description_text() {
+  jq -r '
+    .fields.description |
+    if . == null then ""
+    elif type == "string" then .
+    else [.. | objects | select(.type == "text") | .text] | join(" ")
+    end
+  ' | tr '\n\r' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/[[:space:]]\{1,\}/ /g'
+}
+
+# 0 when ADF content has a node type other than doc/paragraph/text/hardBreak.
+# Marks are not content. Plain-string and null descriptions: 1 (nothing to reject).
+feature_description_has_non_text_nodes() {
+  jq -e '
+    .fields.description |
+    if . == null then false
+    elif type == "string" then false
+    else
+      any(
+        recurse(.content[]? | objects);
+        (.type // "") != "doc" and (.type // "") != "paragraph"
+          and (.type // "") != "text" and (.type // "") != "hardBreak"
+          and (.type // "") != ""
+      )
+    end
+  ' >/dev/null
+}
+
+# 0 if empty/whitespace or the whole text is a TBD-like token (exact, not substring).
+is_placeholder_description() {
+  local lowered
+  lowered=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  [ -z "$lowered" ] && return 0
+  case "$lowered" in
+    tbd|todo|tbc|n/a|na|placeholder|"to be determined"|"coming soon"|wip) return 0 ;;
+  esac
+  return 1
+}
+
+# Sets FEATURE_CHILD_COUNT. Restores FIRST_KEY/KEY_COUNT — collect_keys_from_jql overwrites them.
+count_feature_children() {
+  local saved_first=${FIRST_KEY-} saved_count=${KEY_COUNT-}
+  FEATURE_CHILD_COUNT=0
+  if ! collect_keys_from_jql "parent = $1"; then
+    FIRST_KEY=$saved_first
+    KEY_COUNT=$saved_count
+    return 1
+  fi
+  FEATURE_CHILD_COUNT=$KEY_COUNT
+  FIRST_KEY=$saved_first
+  KEY_COUNT=$saved_count
+}
+
+# 0 only when description is a placeholder AND the Feature has no children. Does not edit.
+assert_empty_placeholder() {
+  local key=$1 view err desc itype project adf_rc=0
+  if ! [[ "${key}" =~ ^OSAC-[0-9]+$ ]]; then
+    echo "${key:-<empty>} is not an OSAC Feature key — not overwriting" >&2
+    return 1
+  fi
+  view=$(new_temp osac-jira-placeholder-view)
+  add_temp "$view"
+  err=$(new_temp osac-jira-placeholder-err)
+  add_temp "$err"
+  if ! jira issue view "$key" --raw >"$view" 2>"$err"; then
+    echo "Could not read ${key} for placeholder check — stopping" >&2
+    cat "$err" >&2
+    return 1
+  fi
+  if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not parse ${key} JSON for placeholder check — stopping" >&2
+    return 1
+  fi
+  project=$(jq -r '.fields.project.key // empty' <"$view")
+  if [ "$project" != "OSAC" ]; then
+    echo "${key} is in project '${project:-unknown}', not OSAC — not overwriting" >&2
+    return 1
+  fi
+  itype=$(jq -r '.fields.issuetype.name // empty' <"$view")
+  if [ "$itype" != "Feature" ]; then
+    echo "${key} is type '${itype:-unknown}', not Feature — not overwriting" >&2
+    return 1
+  fi
+  feature_description_has_non_text_nodes <"$view" || adf_rc=$?
+  if [ "$adf_rc" -eq 0 ]; then
+    echo "${key} is not an empty placeholder (description has non-text ADF nodes) — not overwriting" >&2
+    return 1
+  fi
+  if [ "$adf_rc" -gt 1 ]; then
+    echo "Could not inspect ${key} ADF for placeholder check — stopping" >&2
+    return 1
+  fi
+  desc=$(feature_description_text <"$view")
+  if ! is_placeholder_description "$desc"; then
+    echo "${key} is not an empty placeholder (has a real description) — not overwriting" >&2
+    return 1
+  fi
+  if ! count_feature_children "$key"; then
+    echo "Child-issue lookup failed for ${key} — stopping" >&2
+    return 1
+  fi
+  if [ "${FEATURE_CHILD_COUNT:-0}" -gt 0 ]; then
+    echo "${key} is not an empty placeholder (${FEATURE_CHILD_COUNT} child issue(s)) — not overwriting" >&2
+    return 1
+  fi
+}
+
+read_feature_fields() {
+  local key=$1 view err component team version
+  FEATURE_COMPONENT=
+  FEATURE_TEAM=
+  FEATURE_FIX_VERSION=
+  view=$(new_temp osac-jira-feature-fields)
+  add_temp "$view"
+  err=$(new_temp osac-jira-feature-fields-err)
+  add_temp "$err"
+  if ! jira issue view "$key" --raw >"$view" 2>"$err"; then
+    echo "Could not read ${key} for Component/Team/Fix version" >&2
+    cat "$err" >&2
+    return 1
+  fi
+  if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not parse ${key} JSON for Component/Team/Fix version" >&2
+    return 1
+  fi
+  component=$(jq -r '.fields.components[0].name // empty' <"$view")
+  team=$(jq -r '.fields.customfield_10001.name // empty' <"$view")
+  version=$(jq -r '.fields.fixVersions[0].name // empty' <"$view")
+  FEATURE_COMPONENT=$component
+  FEATURE_TEAM=$team
+  FEATURE_FIX_VERSION=$version
+}
+
+# Takeover: --label appends. Drop labels this skill owns (osac-ux, osac-ui,
+# customer, customer:*); the caller then applies FEATURE_LABELS. Other labels
+# stay. Returns 1 after warning on view/parse/edit failure — caller must not
+# append FEATURE_LABELS (do not stack on labels we failed to drop).
+clear_feature_managed_labels() {
+  local key=$1 view err labs lab args=()
+  view=$(new_temp osac-jira-labels-view)
+  add_temp "$view"
+  err=$(new_temp osac-jira-labels-err)
+  add_temp "$err"
+  labs=$(new_temp osac-jira-labels-list)
+  add_temp "$labs"
+  if ! jira issue view "$key" --raw >"$view" 2>"$err"; then
+    echo "Could not read ${key} labels — managed-label clear skipped" >&2
+    cat "$err" >&2
+    return 1
+  fi
+  if ! jq -e . <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not parse ${key} JSON for labels — managed-label clear skipped" >&2
+    return 1
+  fi
+  if ! jq -e '.fields.labels == null or (.fields.labels | type == "array")' \
+    <"$view" >/dev/null 2>>"$err"; then
+    echo "Could not read ${key} labels (expected array) — managed-label clear skipped" >&2
+    return 1
+  fi
+  if ! jq -r '.fields.labels[]? // empty' <"$view" >"$labs"; then
+    echo "Could not extract ${key} labels — managed-label clear skipped" >&2
+    return 1
+  fi
+  while IFS= read -r lab; do
+    [ -z "$lab" ] && continue
+    case "$lab" in
+      osac-ux|osac-ui|customer|customer:*)
+        args+=(--label "-${lab}")
+        ;;
+    esac
+  done <"$labs"
+  [ ${#args[@]} -eq 0 ] && return 0
+  if ! jira issue edit "$key" "${args[@]}" --no-input 2>"$err" </dev/null; then
+    echo "Feature managed-label clear failed for ${key} — continuing bootstrap" >&2
+    cat "$err" >&2
+    return 1
+  fi
+}
+```
+
 ## Fix version helpers
 
 ```bash
@@ -155,10 +347,21 @@ validate_fix_version() {
 # copying an unset version onto the bootstrap epic. Backlog is not a failure.
 apply_feature_fix_version() {
   local key=$1 version=$2
-  [ "$version" = "backlog" ] && return 0
-  local err
+  [ "$(printf '%s' "$version" | tr '[:upper:]' '[:lower:]')" = "backlog" ] && return 0
+  local err existing
   err=$(new_temp osac-jira-fixver-err)
   add_temp "$err"
+  # --fix-version appends. If the Feature already has Jira's Backlog release,
+  # remove it first so the chosen milestone is not stored alongside Backlog.
+  existing=${FEATURE_FIX_VERSION:-}
+  if [ -n "$existing" ] \
+    && [ "$(printf '%s' "$existing" | tr '[:upper:]' '[:lower:]')" = "backlog" ]; then
+    if ! jira issue edit "$key" --fix-version "-${existing}" --no-input 2>>"$err" </dev/null; then
+      echo "Could not remove Backlog fix version from ${key} — not appending ${version}" >&2
+      cat "$err" >&2
+      return 1
+    fi
+  fi
   if ! jira issue edit "$key" --fix-version "$version" --no-input 2>"$err" </dev/null; then
     echo "Fix version edit failed for ${key} (${version}) — set manually:" >&2
     echo "  jira issue edit ${key} --fix-version \"${version}\" --no-input </dev/null" >&2
@@ -286,21 +489,26 @@ EOF
 ## Bootstrap epic metadata
 
 ```bash
-# After bootstrap epic parent verified. Label at create; copy fix version and
-# team here. Re-run safe on reuse: add label if missing; set fix version/team
-# only when the epic has none. Caller passes "backlog" for fix_version when
-# the Feature edit did not succeed, so a failed Feature update never results
-# in a copied version on the epic. Team has no such sentinel (always passed).
+# After bootstrap epic parent verified. Label at create; copy fix version,
+# team, and component here when the epic is missing them. Re-run safe on reuse.
+# Caller passes "backlog" for fix_version when the Feature edit did not succeed,
+# so a failed Feature update never results in a copied version on the epic.
+# Team and component come from the Feature when set, else $4 / BOOTSTRAP_COMPONENT.
 # requires_ui ("yes"/"no") gates the no-ui label — "no" adds it.
 #
-# The epic's raw JSON is read once and used for both the fixVersion and Team
-# checks below — fix_version's "backlog" case must not skip the Team copy,
-# so the two checks run independently rather than one short-circuiting both.
+# The epic's raw JSON is read once and used for fixVersion, Team, and Component
+# checks — fix_version's "backlog" case must not skip the Team/Component copy,
+# so the checks run independently rather than one short-circuiting the others.
 apply_bootstrap_epic_metadata() {
   local epic_key=$1 feature_key=$2 fix_version=$3 team_name=$4 requires_ui=${5:-yes}
-  local err
+  local err team_source=$team_name feature_component=""
   err=$(new_temp osac-jira-bootstrap-meta-err)
   add_temp "$err"
+
+  if read_feature_fields "$feature_key"; then
+    [ -n "$FEATURE_TEAM" ] && team_source=$FEATURE_TEAM
+    feature_component=${FEATURE_COMPONENT:-}
+  fi
 
   if ! jira issue edit "$epic_key" -l bootstrap --no-input 2>>"$err" </dev/null; then
     echo "Bootstrap label edit failed for ${epic_key} — set manually:" >&2
@@ -318,16 +526,16 @@ apply_bootstrap_epic_metadata() {
 
   local raw
   if ! raw=$(jira issue view "$epic_key" --raw 2>>"$err"); then
-    echo "Could not read ${epic_key} for fix version/team check — set both manually if needed" >&2
+    echo "Could not read ${epic_key} for fix version/team/component check — set manually if needed" >&2
     cat "$err" >&2
     return 0
   fi
   if ! jq -e . >/dev/null 2>&1 <<<"$raw"; then
-    echo "Could not parse ${epic_key} JSON for fix version/team check — set both manually if needed" >&2
+    echo "Could not parse ${epic_key} JSON for fix version/team/component check — set manually if needed" >&2
     return 0
   fi
 
-  if [ "$fix_version" != "backlog" ]; then
+  if [ "$(printf '%s' "$fix_version" | tr '[:upper:]' '[:lower:]')" != "backlog" ]; then
     local epic_version_count
     epic_version_count=$(printf '%s' "$raw" | jq -r '[.fields.fixVersions[]?.name] | length')
     if [ "${epic_version_count:-0}" -eq 0 ]; then
@@ -342,7 +550,20 @@ apply_bootstrap_epic_metadata() {
   local epic_team
   epic_team=$(printf '%s' "$raw" | jq -r '.fields.customfield_10001.name // empty')
   if [ -z "$epic_team" ]; then
-    apply_team "$epic_key" "$team_name"
+    apply_team "$epic_key" "$team_source"
+  fi
+
+  local epic_comp_count epic_component
+  epic_comp_count=$(printf '%s' "$raw" | jq -r '[.fields.components[]?.name] | length')
+  if [ "${epic_comp_count:-0}" -eq 0 ]; then
+    epic_component=${feature_component:-${BOOTSTRAP_COMPONENT:-}}
+    if [ -n "$epic_component" ]; then
+      if ! jira issue edit "$epic_key" --component "$epic_component" --no-input 2>>"$err" </dev/null; then
+        echo "Bootstrap component copy failed for ${epic_key} (${epic_component}) — set manually:" >&2
+        echo "  jira issue edit ${epic_key} --component \"${epic_component}\" --no-input </dev/null" >&2
+        cat "$err" >&2
+      fi
+    fi
   fi
 }
 ```
@@ -353,7 +574,9 @@ Safe-create rules (all create/edit steps):
 - Append **`</dev/null`** to every `jira issue create` and `jira issue edit` — jira-cli
   blocks on stdin in non-TTY shells ([jira-cli#948](https://github.com/ankitpokhrel/jira-cli/issues/948))
 - Run `jira issue create` directly — not inside `$(...)`
-- Write bodies to `--template` files; capture stdout/stderr to temps
+- Create bodies: `--template "$BODY"`. Edit bodies: `-b "$(cat "$BODY")"` —
+  `jira issue edit` has no `--template`. Do not pipe the body on stdin.
+  Capture stdout/stderr to temps.
 - Allow up to 3 minutes per operation; **never kill** and retry
 - Before retry, re-search Jira — duplicate creates are worse than slow creates
 - If stdout is slow, poll Jira (`jira issue view`) instead of killing the in-flight command
