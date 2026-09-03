@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Link agent skill discovery directories to the canonical skills/ tree.
 #
-# Usage: tools/link-agent-skills.sh [--claude] [--cursor] [--gemini] [--all] [--verify]
+# Usage: tools/link-agent-skills.sh [--claude] [--cursor] [--gemini] [--codex] [--all] [--verify]
 #
 # Creates umbrella symlinks:
 #   .claude/skills -> ../skills
 #   .cursor/skills -> ../skills
 #   .gemini/skills -> ../skills
+#   .agents/skills -> ../skills   (Codex)
 #
 # Optionally wires flightctl/ai-workflows skill symlinks under skills/ when
 # ~/.ai-workflows or ./.ai-workflows is present. Consumers that need those
@@ -86,16 +87,18 @@ SHARED_PRD_TEMPLATES=(section-guidance)
 LINK_CLAUDE=false
 LINK_CURSOR=false
 LINK_GEMINI=false
+LINK_CODEX=false
 LINK_AI_WORKFLOWS=false
 VERIFY_ONLY=false
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--all] [--with-ai-workflows] [--verify]
+Usage: $(basename "$0") [--claude] [--cursor] [--gemini] [--codex] [--all] [--with-ai-workflows] [--verify]
 
   --claude              Link .claude/skills -> ../skills
   --cursor              Link .cursor/skills -> ../skills
   --gemini              Link .gemini/skills -> ../skills
+  --codex               Link .agents/skills -> ../skills (Codex skill discovery)
   --all                 Link all agent directories (default when no link flag is given)
   --with-ai-workflows   Also symlink flightctl/ai-workflows under skills/ (opt-in;
                         consumers that bootstrap ai-workflows pass this)
@@ -359,6 +362,9 @@ run_verify() {
   if [[ "${LINK_GEMINI}" == true ]]; then
     verify_symlink "${PROJECT_ROOT}/.gemini" "Gemini" || errors=1
   fi
+  if [[ "${LINK_CODEX}" == true ]]; then
+    verify_symlink "${PROJECT_ROOT}/.agents" "Codex" || errors=1
+  fi
 
   echo "Verifying canonical skills/ content..."
   verify_osac_skills || errors=1
@@ -383,6 +389,7 @@ if [[ $# -eq 0 ]]; then
   LINK_CLAUDE=true
   LINK_CURSOR=true
   LINK_GEMINI=true
+  LINK_CODEX=true
 fi
 
 while [[ $# -gt 0 ]]; do
@@ -390,10 +397,12 @@ while [[ $# -gt 0 ]]; do
     --claude) LINK_CLAUDE=true ;;
     --cursor) LINK_CURSOR=true ;;
     --gemini) LINK_GEMINI=true ;;
+    --codex) LINK_CODEX=true ;;
     --all)
       LINK_CLAUDE=true
       LINK_CURSOR=true
       LINK_GEMINI=true
+      LINK_CODEX=true
       ;;
     --with-ai-workflows) LINK_AI_WORKFLOWS=true ;;
     --verify) VERIFY_ONLY=true ;;
@@ -417,10 +426,12 @@ if [[ "${VERIFY_ONLY}" == true \
    && "${LINK_CLAUDE}" == false \
    && "${LINK_CURSOR}" == false \
    && "${LINK_GEMINI}" == false \
+   && "${LINK_CODEX}" == false \
    && "${LINK_AI_WORKFLOWS}" == false ]]; then
   LINK_CLAUDE=true
   LINK_CURSOR=true
   LINK_GEMINI=true
+  LINK_CODEX=true
   run_verify
   exit $?
 fi
@@ -443,6 +454,9 @@ if [[ "${LINK_CURSOR}" == true ]]; then
 fi
 if [[ "${LINK_GEMINI}" == true ]]; then
   link_agent_skills "${PROJECT_ROOT}/.gemini" "Gemini"
+fi
+if [[ "${LINK_CODEX}" == true ]]; then
+  link_agent_skills "${PROJECT_ROOT}/.agents" "Codex"
 fi
 
 run_verify

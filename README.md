@@ -109,6 +109,14 @@ tools/link-agent-skills.sh --all
 tools/link-agent-skills.sh --all --with-ai-workflows
 ```
 
+`--all` links every supported agent's skill-discovery directory to the canonical
+`skills/` tree. Pass a single tool flag to link just one:
+
+- `--claude` → `.claude/skills -> ../skills`
+- `--cursor` → `.cursor/skills -> ../skills`
+- `--gemini` → `.gemini/skills -> ../skills`
+- `--codex` → `.agents/skills -> ../skills` (OpenAI Codex skill discovery)
+
 From a consumer workspace that vendors this repo (e.g. as `.osac-ai-skills/`),
 set `PROJECT_ROOT` to the consumer root so agent symlinks land there. Native
 skills must already be present under `$PROJECT_ROOT/skills/` (typically as
@@ -121,8 +129,8 @@ PROJECT_ROOT=/path/to/consumer \
 
 `--verify` checks the existing tree and exits non-zero on failure. Alone, it
 does not create links. Combined with linking flags (`--all`, `--claude`,
-`--cursor`, `--gemini`, `--with-ai-workflows`), the script performs the
-requested linking first, then verifies:
+`--cursor`, `--gemini`, `--codex`, `--with-ai-workflows`), the script performs
+the requested linking first, then verifies:
 
 ```bash
 tools/link-agent-skills.sh --all --with-ai-workflows --verify
