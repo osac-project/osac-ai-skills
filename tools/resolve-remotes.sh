@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Detect which git remotes point to the upstream org and the developer's fork.
 #
-# Shared tooling for osac-ai-skills-hosted skills (create-pr, osac-release).
+# Shared tooling for osac-ai-skills-hosted skills (create-pr).
 # Consumers resolve this script from their vendored osac-ai-skills checkout
 # (see resolve_osac_ai_skills_dir()-style lookup in each skill's SKILL.md)
 # rather than carrying their own copy.
