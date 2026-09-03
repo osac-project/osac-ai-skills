@@ -90,10 +90,26 @@ test_no_codex_no_agents_dir() {
   pass "--claude alone does not create .agents/skills"
 }
 
+test_codex_refuses_clobber() {
+  local consumer rc=0
+  consumer=$(make_consumer)
+  # Pre-existing real (non-symlink) .agents/skills must not be silently replaced.
+  mkdir -p "${consumer}/.agents/skills"
+  echo "hand-maintained" > "${consumer}/.agents/skills/keep.txt"
+  PROJECT_ROOT="$consumer" "$SCRIPT" --codex >/dev/null 2>&1 || rc=$?
+  [[ "$rc" -ne 0 ]] || fail "--codex clobbered a real .agents/skills directory (expected non-zero exit)"
+  [[ -f "${consumer}/.agents/skills/keep.txt" ]] \
+    || fail "--codex destroyed pre-existing .agents/skills content"
+  [[ ! -L "${consumer}/.agents/skills" ]] \
+    || fail "--codex replaced real .agents/skills with a symlink"
+  pass "--codex refuses to clobber a real .agents/skills"
+}
+
 test_codex_flag_creates_agents_skills
 test_all_includes_codex
 test_codex_verify_passes
 test_codex_idempotent
 test_no_codex_no_agents_dir
+test_codex_refuses_clobber
 
 echo "All link-agent-skills --codex smoke tests passed."

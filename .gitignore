@@ -30,6 +30,7 @@ __pycache__/
 !.claude/hooks/
 .cursor/
 .gemini/
+.agents/
 .mcp.json
 
 # Vendored flightctl/ai-workflows (consumer bootstrap; optional locally)
