@@ -1,7 +1,7 @@
 ---
 name: test-plan-score
 metadata:
-  version: "0.5.0"
+  version: "0.7.3"
 description: |
   Score an OSAC test plan against the 5-dimension rubric (Specificity,
   Grounding, Scope Fidelity, Actionability, Consistency). Produces
@@ -9,8 +9,8 @@ description: |
   Grounding checks per-component integration tier, boundary, suite, and
   real-versus-faked dependencies against OSAC touched-area guidance.
 
-  Trigger when a testplan.md is ready for review, or when the user asks to
-  score or review a test plan.
+  Required on relevant enhancement-proposals PRs that change a test plan,
+  design, or its PRD. Also trigger when the user requests test-plan scoring.
 ---
 
 # OSAC Test Plan Scorer
@@ -62,29 +62,17 @@ The input testplan follows this structure:
 | Automated / Manual | ... |
 ```
 
-For OSAC changes, use the per-component coverage matrix required by the shared
-planning guidance to connect each behavior to its tier, boundary, owner, suite,
-and execution evidence. If the matrix is absent, compare the test cases with the
-touched-area maps and report the missing evidence. Do not treat a test case as
-proof of a boundary unless its documented tier and dependencies actually
-exercise that boundary. Each row must identify the owning component, touched
-behavior and requirement/interface references; required tier and boundary;
-owner and test-case IDs; existing suite/file or proposed location; verified
-test command and working directory, or a concrete manual procedure; if a shell
-command or working directory does not apply, state N/A and why; environment
-prerequisites;
-real-versus-mocked/omitted
-dependencies; execution status; and any unavailable suite or unresolved
-prerequisite with its follow-up Jira URL or an explicit no-owner/ticket
-statement.
-If no owner or ticket exists, state that the gap is unresolved without inventing
-a ticket.
-
-Verify existing suites and commands against repository guidance. Label a new
-location or unverified command as proposed. Record `not run` or `blocked`
-honestly; neither is a passing result. A reported pass needs evidence of the
-command or manual procedure and observed result. Keep planned coverage, an identified execution path, and a passed execution
-distinct in the score and feedback.
+For OSAC changes, use the shared planning guide, affected component maps, and
+approved PRD/design boundaries together. The guide defines canonical tiers and
+shared evidence/ownership rules; maps define behavior-specific boundaries. A
+matrix or tier taxonomy alone does not require integration coverage. If the
+matrix is absent, report missing evidence against the maps. Each row names the
+component and behavior, requirement, tier/boundary, owner and cases, suite or
+proposed location, verified command or concrete manual procedure, prerequisites,
+real-versus-mocked dependencies, execution status, and follow-up for unavailable
+work. Explain N/A, label proposals, and do not invent owners or tickets. Do not
+claim a boundary the setup does not exercise. Verify commands and observed
+results; planned coverage, an execution path, and a passing run are distinct.
 
 ## Input Detection
 
@@ -118,35 +106,31 @@ covered.
 
 ## Scoring Process
 
+Use the shared guide and affected maps together, preserving explicit approved
+PRD/design boundaries. A matrix or tier taxonomy alone does not require
+integration coverage. Strategy/reference documents provide examples, not
+execution gates; use current guidance over stale examples and disclose conflicts.
+
+For Grounding 1, identify a missing or ambiguous execution-row field, omitted
+required case, or unsupported existing-source claim. A fully disclosed proposed
+location/helper is not an unsupported existing-source claim. For Consistency 1,
+identify an actual count, ID, grouping or internal contradiction; optional extra
+columns/audit tables, consistent local aliases and a valid uniform priority do
+not alone justify a deduction. Risk-priority advice is not an invented PRD AC.
+
 Score each dimension independently. For each:
 1. Quote specific evidence from the testplan
 2. Assign the score (0, 1, or 2)
 3. Note what would raise the score
 
-Before assigning Grounding, compare the plan's component and behavior rows with
-the affected components' touched-area maps and the relevant component sections
-of `docs/INTEGRATION-TESTING.md`. For every required matrix row,
-record the owning component and behavior, requirement/interface references,
-test-case IDs, claimed tier, owner, required boundary, named suite or proposed
-location, verified command or concrete manual procedure, applicable working
-directory or justified N/A, environment prerequisites, execution status, and
-which dependencies run for real versus being mocked, stubbed, or
-omitted. Record a follow-up Jira URL for each known unavailable suite or
-unresolved infrastructure prerequisite, or state that no owner/ticket exists.
-Check that any component-specific tier label maps to the canonical tier in the
-shared guidance, and that the row's owner matches the documented tier ownership.
-Each coverage row must select one canonical tier; slash-separated alternatives
-or multiple candidate tiers are ambiguous and do not identify an execution path.
-A manual case may identify its procedure instead of a shell command and explain
-why a working directory does not apply. Supplemental static/build checks may be
-listed separately as non-test validation, but are not a test tier and cannot
-satisfy a Unit, Envtest, component-integration, Contract, or E2E requirement.
-Only compare boundaries that apply to the changed behavior; a documented
-provider gap for unrelated behavior is not a failure. A proposed suite location
-must be labelled proposed and must not be described as an existing runnable
-suite. Verify an existing command against the repository file that defines it;
-label an unverified or invented command as proposed, and do not count it as an
-identified runnable path.
+Before assigning Grounding, compare each required row with approved PRD/design
+boundaries, affected maps, the shared guide, and cited repository sources.
+Verify its canonical tier, owner, boundary, case IDs, suite/location,
+command or manual procedure, prerequisites, status, dependencies, and gaps or
+follow-up. A row must select one tier, not alternatives. Label unverified paths
+as proposed; manual cases need an actionable procedure and justified N/A.
+Static/build checks are not test tiers. Assess only boundaries for changed
+behavior; unrelated provider gaps are not failures.
 
 ### Dimension 1: Specificity (0-2)
 
@@ -205,6 +189,13 @@ actionable, gaps have a follow-up or are explicitly unresolved, and the plan
 points to the relevant
 test codebase or existing test pattern.
 
+This is a planning gate. New tests need not already exist or have passed. A
+clearly proposed case with a complete execution row can receive Grounding 2.
+An explicitly unresolved owner/ticket satisfies gap disclosure; do not invent
+a requirement for an assigned person or filed issue. A missing required case
+is different from a planned case whose harness still needs implementation.
+Do not infer priority requirements absent from the PRD/design.
+
 `Not run` or `blocked` is a valid execution status when stated accurately; it
 does not count as a passing test. A claimed pass without command or manual procedure and observed-result
 evidence is unsubstantiated and must be reported as not passed. Absent or
@@ -255,7 +246,7 @@ For each TC check:
 - Steps are numbered with specific API calls and parameters
 - Expected Results state observable outcomes (not restatements of ACs)
 - Story/AC metadata links to the implementing story
-- The owner matches the test tier's documented work ownership
+- The work owner is present and matches the test tier's documented ownership
 - The test approach identifies the suite and verified command or a concrete
   manual procedure, plus applicable working directory or justified N/A for a
   manual case, and environment prerequisites without presenting proposed details
@@ -263,12 +254,19 @@ For each TC check:
 - Execution status distinguishes planned, blocked, not run, and passed evidence
 - Priority and Automation fields are set
 
-Missing matrix evidence fields are Grounding gaps; do not score Actionability 0
-solely for those omissions.
+Missing matrix fields are Grounding gaps, not Actionability 0. For an otherwise
+usable case, a missing or tier-mismatched owner scores Actionability 1; score 2
+requires a present, tier-consistent owner on every case. Owner gaps do not cause
+Actionability 0 or the integration-boundary Rework veto. Apply Grounding and
+`integrationRequired` rules separately; see `references/ci-assessment.md`.
 
-**0** = Missing steps or assertions, or no usable behavioral test scenario
-**1** = Structure present but some TCs lack specifics
-**2** = Every TC fully specified with preconditions, steps, results
+**0** = A case has no steps, has neither expected results nor assertions, or
+has no usable behavioral test scenario
+**1** = Steps and expected results are present, but some cases have vague or
+unobservable outcomes, missing parameters, or an otherwise usable case has a
+missing or tier-mismatched work owner
+**2** = Every TC fully specified with preconditions, steps, results, and a
+present work owner consistent with its canonical tier
 
 ### Dimension 5: Consistency (0-2)
 
@@ -289,10 +287,28 @@ Check:
 
 ## Verdict
 
+### CI assessment mode
+
+Trusted CI callers select the internal contract in
+[CI assessment mode](references/ci-assessment.md). Return scores, evidence and
+explicit policy facts; trusted code emits the public verdict. Standalone
+scoring uses the output format below. Preserve every rubric cap and veto in
+both modes.
+
+### Public verdict rules
+
 - **Ready** (8-10): Test plan is implementation-ready
 - **Revise** (5-7): Address gaps, re-score
 - **Rework** (0-4 or any zero): Fundamental issues — zero on any
   dimension is automatic Rework
+
+Calculate the verdict from the final scores, then apply only the explicit
+rubric caps and boundary veto below. A total of 8-10 with no zero is Ready
+unless a stated cap applies. A nonzero Consistency 1 or an improvement
+suggestion alone does not cap that result at Revise. If returning Revise for
+8-10, name the applicable cap, affected case and missing required evidence.
+Return one final score per dimension; numeric scores, notes, total and verdict
+must agree.
 
 ### Integration-boundary Rework veto
 
@@ -330,7 +346,7 @@ Write `verdict.json`:
   "total": 8,
   "criterionNotes": {
     "specificity": "...",
-    "grounding": "...",
+    "grounding": "Grounding 1 with integrationRequired=true caps the 8-point plan at Revise: TC-FR4-01 is the required component-integration case, but its execution row omits the command (verified or explicitly proposed) and working directory.",
     "scope_fidelity": "...",
     "actionability": "...",
     "consistency": "..."
@@ -347,6 +363,37 @@ Write `verdict.json`:
 
 This matches the org-pulse test plan data schema and the
 PRD/design review verdict format.
+
+## Required CI gate
+
+Enhancement-proposals CI invokes this scorer for every affected plan, including
+an unchanged plan whose PRD or design changed. A new or edited design requires
+a plan: an affected enhancement that has a design but no test plan is recorded
+as an unscored affected plan missing required context and fails the aggregate
+check, as does removing or renaming the only test plan. PRD-only work without
+a design and unrelated changes are not applicable; untouched legacy designs
+are not retroactively required to add a plan. A PR that changes no enhancement
+PRD, design, or test plan resolves to an explicitly recorded Not-applicable
+result, never a silent vacuous pass; an empty affected-plan set cannot skip a
+required plan.
+
+Only a valid **Ready** verdict permits merge. A high numeric total cannot
+override evidence caps or integration-boundary vetoes in the scoring rubric.
+Keep the five-dimension `verdict.json` contract. Missing required context,
+invalid model output, service errors, and an unscored affected plan block the
+gate; a previous comment or label is not a passing result for the current PR.
+
+The caller publishes one aggregate `Test Plan Score` check on the exact PR
+head SHA and retains each plan's verdict and feedback. All affected plans must
+be Ready. Re-score on PR updates or an authorized `/test-plan-score` retry.
+A `/test-plan-respond` revision requires a fresh score; it cannot pass the gate
+by itself. Completeness review remains diagnostic after Revise or Rework.
+
+Read the authoritative PRD, design, rubric and references plus the trusted
+OSAC checkout's integration guidance, affected component maps and cited test
+sources. The caller records the source commit SHAs. If required evidence is
+unavailable, disclose the gap instead of claiming it was verified. Plan
+readiness does not mean the planned tests have executed successfully.
 
 ## Notes
 

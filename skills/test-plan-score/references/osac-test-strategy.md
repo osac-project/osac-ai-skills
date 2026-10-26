@@ -3,6 +3,16 @@
 This file provides the OSAC-specific testing context that /test-plan-create
 and /test-plan-score need to generate grounded, actionable test plans.
 
+## Guidance scope and precedence
+
+This reference contains historical framework examples and implementation/release
+quality gates. Current OSAC `docs/INTEGRATION-TESTING.md` and component `AGENTS.md`
+are authoritative for suite ownership, tiers, commands and boundaries; use them
+when these historical examples differ (including E2E suites now in `tests/e2e/`).
+The scorer skill and scoring rubric define plan-readiness verdicts. Gates 1–4
+below describe implemented-code and release evidence, not requirements that a
+new plan's tests already exist or pass before its plan can be Ready.
+
 ## Test Pyramid
 
 Every OSAC test belongs at a specific level. The level determines which repo,

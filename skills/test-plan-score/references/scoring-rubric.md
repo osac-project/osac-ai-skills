@@ -12,9 +12,20 @@ numbered steps, and concrete expected results.
 
 ## Verdicts
 
+For the skill's explicit CI assessment mode, assess scores and evidence-backed
+policy facts. The trusted gate derives the final verdict using these bands and
+all caps/vetoes. It preserves the public verdict format. The model does not
+supply the authoritative final verdict in that mode.
+
 - **Ready** (8-10): Test plan is implementation-ready
 - **Revise** (5-7): Address gaps, re-score
 - **Rework** (0-4 or any zero): Fundamental issues
+
+Apply the numeric band first, then the explicit caps/vetoes below. With no
+zero score, 8-10 is Ready unless a stated cap applies. A nonzero Consistency 1
+or an improvement suggestion alone is not a Revise cap. For an 8-10 Revise,
+identify the applicable cap, affected case and missing required evidence.
+The final scores, criterion notes, total and verdict must agree.
 
 When integration coverage is required, Grounding 1 caps the verdict at
 **Revise**; only complete boundary evidence can support **Ready**. If no
@@ -40,6 +51,20 @@ requires only a lower tier.
 
 ## Dimensions
 
+Grade plan readiness with this rubric. Use the trusted shared
+`docs/INTEGRATION-TESTING.md` and each affected component's touched-area map
+together: the shared guide establishes canonical tiers, common planning
+requirements and ownership, while the map identifies behavior-specific
+required tiers and boundaries. Preserve explicit boundary requirements in the
+approved PRD/design as well. A matrix requirement or shared tier definitions
+alone do not require an integration-tier case. Implementation/release execution
+quality gates in strategy references do not govern this planning verdict.
+Clearly disclosed proposed work is not a claim that the harness already exists.
+Grounding 1 needs a named missing/ambiguous matrix field, omitted required case
+or unsupported existing-source claim. Consistency deductions need an actual
+count, ID, grouping or internal contradiction; consistent local aliases, optional
+audit tables/columns and a valid uniform priority are not such contradictions.
+
 ### 1. Specificity (0-2)
 
 **Does each TC name concrete scenarios with specific inputs and outputs?**
@@ -61,9 +86,12 @@ field value, error type), not a restatement of the acceptance criteria.
 **Is the plan grounded in the actual test codebase and required component
 integration boundaries?**
 
-For every required coverage-matrix row, check the component's touched-area map,
-the relevant `docs/INTEGRATION-TESTING.md` section for tier/command/boundary,
-and the shared planning-evidence guidance. The row must name its tier,
+For every required coverage-matrix row, check the approved PRD/design boundary
+requirements, the component's touched-area map for behavior-specific required
+tiers/boundaries, and the relevant `docs/INTEGRATION-TESTING.md` sections for
+canonical tier mapping, shared evidence/ownership requirements, suite boundaries
+and gaps. These sources are complementary; do not replace one with another.
+The row must name its tier,
 owning component and `[DEV]`/`[QE]` work owner, touched behavior,
 requirement/interface references, boundary, test-case IDs, existing suite/file
 or clearly proposed location, verified or explicitly proposed command or
@@ -92,11 +120,19 @@ component-integration, Contract, or E2E requirement.
   procedure, applicable working directory or justified N/A for a manual case,
   prerequisites, execution status, real-versus-faked dependencies, or
   documented gap/follow-up. No usable test-codebase grounding by itself is an
-  evidence gap: score 1, not 0.
+  evidence gap: score 1, not 0. A missing or tier-mismatched work owner is
+  incomplete evidence, not a boundary mismatch by itself.
 - 2 = Every applicable row contains the required planning evidence; existing
   commands are verified, proposed paths/commands are labelled, manual paths are
   actionable, gaps have a follow-up or are explicitly unresolved, and the plan
   points to the relevant test codebase or existing test pattern
+
+This is a planning gate, not an execution gate. A clearly proposed case with
+a complete execution row can receive Grounding 2 before its test code exists.
+Explicitly stating that no person or ticket is assigned satisfies the gap
+disclosure rule; it does not by itself cap readiness. Require a case for each
+required boundary, not proof that the planned case has already passed.
+Do not introduce priority requirements absent from the authoritative sources.
 
 `Not run` or `blocked` is a valid status when stated accurately, but is not a
 passing result. A claimed pass without command or manual procedure and observed-result
@@ -165,13 +201,24 @@ and how tests run, not what they test.
 
 **Can an engineer implement the tests from the plan without guessing?**
 
-- 0 = Missing steps or assertions, or no usable behavioral test scenario
-- 1 = Structure present but some TCs lack specific parameters or assertions
+- 0 = A case has no steps, has neither expected results nor assertions, or has
+  no usable behavioral test scenario
+- 1 = Steps and expected results are present, but some cases have vague or
+  unobservable outcomes or missing parameters
 - 2 = Every TC specifies preconditions, numbered steps with parameters, and concrete expected results
 
-Also verify that each case has an owner consistent with its required tier. A
-missing or mismatched owner is an actionability gap; it does not trigger the
-integration-boundary Rework veto by itself.
+Also verify that each case has a present work owner consistent with its required
+canonical tier: Unit, Envtest, Component integration, and Contract cases belong
+to the owning `[DEV]` story; deployed cross-component E2E cases belong to
+`[QE]`. For an otherwise usable behavioral case, a missing owner or owner that
+does not match the tier scores Actionability 1; score 2 only when every case
+has a present, tier-consistent owner. An owner gap alone never scores 0. If the
+coverage row requires an owner, the gap is also Grounding 1 evidence; a missing
+owner on a required integration row is subject to the existing
+`integrationRequired` Revise cap. It is not a boundary mismatch, is not an
+integration-boundary Rework veto, and does not add a separate `policy.caps`
+entry. State affected case IDs and sources, and do not invent an assigned
+person or ticket when none exists.
 Missing matrix evidence fields are Grounding gaps; do not score Actionability
 0 solely for those omissions.
 Also verify that the implementation path names a suite and verified command or
@@ -181,9 +228,12 @@ status. Mark unverified commands and new
 locations as proposed; do not present them as existing runnable coverage.
 
 **Calibration:**
-- A=0: "Test DiskImage functionality" with no steps or expected results
-- A=1: TCs have steps and results but omit concrete request parameters or
-  independently observable assertions
+- A=0: "Test DiskImage functionality" with no steps, or a case with steps but
+  neither expected results nor assertions
+- A=1: TCs have steps and expected results but omit concrete request
+  parameters or state outcomes vaguely without an observable assertion
+- A=1: An otherwise complete case has no work owner or names `[QE]` for a
+  component-integration case (which the shared ownership rule assigns to `[DEV]`)
 - A=2: "Preconditions: Authenticated as Cloud Provider Admin,
   fulfillment-service running. Steps: 1) Call DiskImages/Create with
   source_type=REGISTRY... Expected: Response status 200 OK, DiskImage
