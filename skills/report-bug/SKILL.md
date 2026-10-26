@@ -2,7 +2,7 @@
 name: report-bug
 description: Report a bug in Jira without fixing it — creates a Bug ticket with proper description, links it to an epic, and assigns it. Use when the user says 'report a bug', 'file a bug', 'log a bug', 'open a bug ticket', or wants to track a bug without immediately writing a fix.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # Report Bug
@@ -269,7 +269,7 @@ cat >"$BODY" <<'EOF'
 
 ---
 
-_This bug was reported with AI assistance ([report-bug](https://github.com/osac-project/osac-workspace/tree/main/skills/report-bug) v<SKILL_VERSION>). Review for accuracy_
+_This bug was reported with AI assistance using the report-bug skill v<SKILL_VERSION>. Review for accuracy_
 EOF
 
 AFFECTS_VERSION_ARGS=()
