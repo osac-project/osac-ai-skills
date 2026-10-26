@@ -88,6 +88,7 @@ Phases: `/e2e:ingest` → `/e2e:plan` → `/e2e:code` → `/e2e:validate` →
 - `/create-pr` — Runs repo-specific validation and creates a PR via the fork workflow
 - `/pre-pr-review` — Config-driven pre-flight review gate (create-pr Step 4) without opening a PR
 - `/code-review` — Review your current diff before submitting
+- `/coverage-report` — Generate and explain a capability-area coverage report from the deterministic reporter
 
 Each skill is phase-based — you can jump directly to any phase (e.g.
 `/prd:draft`, `/implement:code`).

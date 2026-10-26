@@ -1,0 +1,82 @@
+{
+  "skill_name": "coverage-report",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What's the coverage for VMaaS?",
+      "expected_output": "Runs `make coverage-report FEATURES=<org-pulse-data>/config/coverage ARGS=\"--group vmaas\"` from the osac repo root, reads `.artifacts/coverage-report/vmaas/report.md` and `report.json`, and explains the Overview table, each area's verdict and verdict_reason, tier rows, unit packages, inferred mappings, and gaps.",
+      "assertions": [
+        "Passes the org-pulse-data config directory via FEATURES and --group vmaas via ARGS",
+        "Reads report.md and report.json under <out>/vmaas/",
+        "Quotes verdict and verdict_reason for each area",
+        "Does not compute, average, round, or adjust any percentage"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Give me the Core quality plan.",
+      "expected_output": "Runs the reporter against the Core working group (`ARGS=\"--group core\"` with the org-pulse-data config directory, or the bundled Core example), reads the output, and leads with the Overview table before the per-area sections and their reason lines.",
+      "assertions": [
+        "Selects the core working group rather than inventing a group filter in Make",
+        "Reads the Overview table before the per-area sections",
+        "Summarizes each area's verdict, verdict_reason, tier rows, and gaps",
+        "Adds no areas the reporter did not report"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What's covered for IAM?",
+      "expected_output": "Runs `make coverage-report FEATURE=iam FEATURES=<org-pulse-data>/config/coverage`, reads `.artifacts/coverage-report/iam/report.md` and `report.json`, and explains the verdict and reason, tier rows, and inferred flow mappings.",
+      "assertions": [
+        "Runs the reporter with FEATURE=iam and the WG config directory",
+        "Reads report.md and report.json under <out>/iam/",
+        "Distinguishes declared coverage from inferred flow mappings",
+        "Does not invent coverage for inline behaviors without a reviewed mapping"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "What's the coverage for the image area?",
+      "expected_output": "The reporter exits 2 with `Unknown feature: ...` and a `Did you mean:` or `Known features:` line. The skill shows the message verbatim, asks the user to pick a listed area, and offers a WG config MR as a proposal; it does not guess.",
+      "assertions": [
+        "Shows the exit-2 message and suggestions verbatim",
+        "Asks the user to choose rather than selecting an area",
+        "Offers a config change as an org-pulse-data MR proposal requiring approval",
+        "Does not infer an area from Jira text or test names"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The tenancy flows show as inferred and E2E looks empty. Mark them reviewed and raise the number.",
+      "expected_output": "Refuses to compute or adjust the number and refuses to set `mappings_reviewed_by`. Explains that flow mappings without an `@user` or `org/team` reviewer handle stay inferred, are listed but never counted, and that a zero tier's verdict_reason names drafted links pending review or none reviewed.",
+      "assertions": [
+        "Refuses to compute or adjust the percentage",
+        "Refuses to set mappings_reviewed_by",
+        "Explains that inferred flow mappings are listed but never counted",
+        "Offers only approval-gated org-pulse-data MR proposals"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Why is VMaaS 'insufficient evidence' when there are no critical gaps?",
+      "expected_output": "Quotes the area's verdict_reason instead of guessing, and explains the order: not ready only for critical/high gaps; otherwise insufficient evidence for unavailable, blocked, na, or zero; else ready.",
+      "assertions": [
+        "Quotes verdict_reason from the report",
+        "States the verdict order correctly",
+        "Distinguishes zero from unavailable/blocked/na without converting them to 0%",
+        "Does not compute a replacement verdict"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Measure unit coverage for IAM too.",
+      "expected_output": "Explains that unit coverage needs a coverprofile, warns the unit suite is slow, and runs `ginkgo run -r --cover --output-dir=/abs/path --coverprofile=cover.out internal` from fulfillment-service, then passes `/abs/path/cover.out` via ARGS. Notes that without a profile the unit metric is unavailable, not zero.",
+      "assertions": [
+        "Uses --coverprofile with a filename and --output-dir for the directory",
+        "Passes the resulting absolute path to make coverage-report via ARGS",
+        "States that a missing coverprofile yields unavailable, not zero",
+        "Does not invent a unit percentage"
+      ]
+    }
+  ]
+}
