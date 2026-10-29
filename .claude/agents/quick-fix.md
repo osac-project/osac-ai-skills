@@ -96,8 +96,13 @@ Example: `fix/OSAC-356-vm-namespace-lookup`
 ## Step 3: Write the Fix
 
 When changing logging or error handling, read and apply
-`skills/logging-guidelines/SKILL.md` from the vendored `osac-ai-skills` checkout
-(resolve the checkout as in Step 7) before writing the fix.
+`.claude/skills/logging-guidelines/SKILL.md` through the active skills link
+before writing the fix. Resolve it relative to the project/consumer root whose
+`.claude/agents/quick-fix.md` loaded this agent (the skills repository root in
+a standalone checkout), not the affected component's working directory.
+Use this active link instead of Step 7's home-first vendor lookup. If the active
+policy is missing or unreadable, stop and ask to bootstrap/relink that project.
+Do not fall back to an unrelated home checkout.
 
 1. **Read** the affected files first — never guess at code
 2. Make the **minimal** change to fix the bug
