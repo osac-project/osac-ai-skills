@@ -95,6 +95,10 @@ Example: `fix/OSAC-356-vm-namespace-lookup`
 
 ## Step 3: Write the Fix
 
+When changing logging or error handling, read and apply
+`skills/logging-guidelines/SKILL.md` from the vendored `osac-ai-skills` checkout
+(resolve the checkout as in Step 7) before writing the fix.
+
 1. **Read** the affected files first — never guess at code
 2. Make the **minimal** change to fix the bug
 3. Do not refactor surrounding code, add comments to unchanged code, or "improve" anything beyond the fix

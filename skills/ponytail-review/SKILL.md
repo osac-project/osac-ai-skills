@@ -14,7 +14,7 @@ description: >
   https://github.com/DietrichGebert/ponytail.
 allowed-tools: Read, Grep, Bash, Glob
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Ponytail Review
@@ -124,6 +124,12 @@ If there is nothing to cut or de-duplicate, say `Lean already. Ship.` and
 stop.
 
 ## Boundaries
+
+For logging/error changes, read [logging guidelines](../logging-guidelines/SKILL.md)
+relative to this skill directory. Flag redundant error logs when a caller or
+framework already owns reporting as `shrink:` (ADVISORY), not `duplicate:`
+for trivial logging idioms. Preserve the owning log and useful state changes;
+leave level correctness, cause preservation, and security to their review passes.
 
 Scope: over-engineering, complexity, and duplication only. Correctness
 bugs, security holes, and performance are explicitly out of scope. Route

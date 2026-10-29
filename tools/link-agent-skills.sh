@@ -59,6 +59,7 @@ OSAC_SKILLS=(
   generate-status-report
   github-actions-workflows
   jira-task-management
+  logging-guidelines
   milestone-scope
   osac-cluster
   osac-demo-recording
