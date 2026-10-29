@@ -37,6 +37,8 @@ assert_codex_link() {
   [[ "$resolved" == "$expected" ]] || fail ".agents/skills resolved to $resolved, expected $expected"
   [[ -r "${consumer}/.agents/skills/create-pr/SKILL.md" ]] \
     || fail "cannot read create-pr via .agents/skills"
+  [[ -r "${consumer}/.agents/skills/logging-guidelines/SKILL.md" ]] \
+    || fail "cannot read logging-guidelines via .agents/skills"
 }
 
 # --- Contracts ---
@@ -58,7 +60,24 @@ test_all_includes_codex() {
   PROJECT_ROOT="$consumer" "$SCRIPT" --all >/dev/null
   assert_codex_link "$consumer"
   [[ -L "${consumer}/.claude/skills" ]] || fail "--all did not create .claude/skills"
+  local agent_dir
+  for agent_dir in .claude .cursor .gemini .agents; do
+    [[ -r "${consumer}/${agent_dir}/skills/logging-guidelines/SKILL.md" ]] \
+      || fail "cannot read logging-guidelines via ${agent_dir}/skills"
+  done
   pass "--all includes codex"
+}
+
+test_verify_requires_logging_guidelines() {
+  local consumer out rc=0
+  consumer=$(make_consumer)
+  PROJECT_ROOT="$consumer" "$SCRIPT" --codex >/dev/null
+  rm "${consumer}/skills/logging-guidelines"
+  out=$(PROJECT_ROOT="$consumer" "$SCRIPT" --verify 2>&1) || rc=$?
+  [[ "$rc" -ne 0 ]] || fail "verification accepted missing logging-guidelines"
+  echo "$out" | grep -q "logging-guidelines" \
+    || fail "verification did not identify missing logging-guidelines: $out"
+  pass "--verify requires registered logging-guidelines skill"
 }
 
 test_codex_verify_passes() {
@@ -107,6 +126,7 @@ test_codex_refuses_clobber() {
 
 test_codex_flag_creates_agents_skills
 test_all_includes_codex
+test_verify_requires_logging_guidelines
 test_codex_verify_passes
 test_codex_idempotent
 test_no_codex_no_agents_dir

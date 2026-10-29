@@ -58,6 +58,22 @@ link_native_skills_into() {
 
 # --- Contracts ---
 
+assert_active_logging_policy() {
+  local project_root="$1" active_checkout="$2" instructions policy_path expected
+  instructions=$(sed -n '/^## Step 3:/,/^## Step 4:/p' \
+    "${project_root}/.claude/agents/quick-fix.md")
+  policy_path=$(printf '%s\n' "$instructions" \
+    | sed -n 's/^`\([^`]*logging-guidelines\/SKILL.md\)`.*/\1/p')
+  [[ "$policy_path" == ".claude/skills/logging-guidelines/SKILL.md" ]] \
+    || fail "Step 3 must load policy through active skills link, got: $policy_path"
+  [[ -r "${project_root}/${policy_path}" ]] || fail "active logging policy is unreadable"
+  expected=$(realpath "${active_checkout}/skills/logging-guidelines/SKILL.md")
+  [[ "$(realpath "${project_root}/${policy_path}")" == "$expected" ]] \
+    || fail "Step 3 policy differs from active checkout policy"
+  printf '%s\n' "$instructions" | grep -q 'Do not fall back' \
+    || fail "Step 3 must reject an unrelated home-policy fallback"
+}
+
 test_default_project_root_links_in_repo() {
   # Unset PROJECT_ROOT → agent links land under the skills repo root of an
   # isolated copy (not the developer checkout).
@@ -76,7 +92,38 @@ test_default_project_root_links_in_repo() {
   resolved=$(cd -L "${isolated}/.claude/skills" && pwd -P)
   [[ "$resolved" == "$expected" ]] || fail "default mode resolved to $resolved, expected $expected"
   [[ -r "${isolated}/.claude/skills/create-pr/SKILL.md" ]] || fail "cannot read create-pr via isolated .claude/skills"
+  assert_active_logging_policy "$isolated" "$isolated"
   pass "unset PROJECT_ROOT links under skills repo root (isolated fixture)"
+}
+
+test_logging_policy_ignores_stale_home_checkout() {
+  local consumer active_checkout fake_home home_policy home_state
+  consumer=$(mktemp -d "${TMPDIR_ROOT}/logging-consumer.XXXXXX")
+  active_checkout="${consumer}/.osac-ai-skills"
+  mv "$(make_standalone_fixture)" "$active_checkout"
+  ln -s "${active_checkout}/skills" "${consumer}/skills"
+  fake_home=$(mktemp -d "${TMPDIR_ROOT}/logging-home.XXXXXX")
+  home_policy="${fake_home}/.osac-ai-skills/skills/logging-guidelines/SKILL.md"
+  mkdir -p "$(dirname "$home_policy")" "${fake_home}/.osac-ai-skills/tools"
+  cp "${REPO_ROOT}/tools/resolve-remotes.sh" "${fake_home}/.osac-ai-skills/tools/"
+  [[ -x "${fake_home}/.osac-ai-skills/tools/resolve-remotes.sh" ]] \
+    || fail "stale home fixture must satisfy Step 7's executable-resolver condition"
+  printf 'stale home policy\n' > "$home_policy"
+  for home_state in stale missing; do
+    [[ "$home_state" != missing ]] || rm "$home_policy"
+    HOME="$fake_home" PROJECT_ROOT="$consumer" \
+      "${active_checkout}/tools/link-agent-skills.sh" --claude --verify >/dev/null
+    [[ "$(realpath "${consumer}/.claude/agents/quick-fix.md")" == \
+      "${active_checkout}/.claude/agents/quick-fix.md" ]] \
+      || fail "consumer agent is not from active project-local checkout"
+    HOME="$fake_home" assert_active_logging_policy "$consumer" "$active_checkout"
+    pass "Step 3 reads active linked policy with $home_state home policy"
+  done
+  printf 'stale home policy\n' > "$home_policy"
+  rm "${active_checkout}/skills/logging-guidelines"
+  [[ ! -r "${consumer}/.claude/skills/logging-guidelines/SKILL.md" && -r "$home_policy" ]] \
+    || fail "missing active policy must remain missing despite available home policy"
+  pass "missing active policy cannot resolve to unrelated home policy"
 }
 
 test_project_root_override_links_consumer() {
@@ -330,6 +377,7 @@ test_verify_with_ai_workflows_only_links_workflows() {
 }
 
 test_default_project_root_links_in_repo
+test_logging_policy_ignores_stale_home_checkout
 test_project_root_override_links_consumer
 test_safe_symlink_promotes_identical_real_file
 test_safe_symlink_refuses_differing_real_file

@@ -72,6 +72,10 @@ code via TDD, validate, and publish a PR.
 Phases: `/implement:ingest` → `/implement:plan` → `/implement:code` →
 `/implement:validate` → `/implement:publish` → `/implement:respond`
 
+When implementing or fixing logging/error-handling code, first read and apply
+the shared [logging guidelines](skills/logging-guidelines/SKILL.md). Review
+skills load the same policy for their relevant checks.
+
 ### 6. Write E2E Tests
 
 `/e2e` — Pick up a [QE] Jira task produced by the design workflow, discover

@@ -3,7 +3,7 @@ name: security-review
 description: Adversarial security review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for RBAC/authz issues, injection, data exposure, permission-manifest widening, embedded secrets, prompt-injection patterns, and OSAC-specific policy violations (tenant isolation, multi-tenancy). Use standalone before opening a PR, via review-gate (which pairs it with performance-review), or via create-pr's config-driven pre-flight gate, which invokes it directly. Adapted from a production multi-agent review pipeline's security dimension.
 allowed-tools: Read, Grep, Bash, Glob
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # Security Review
@@ -93,6 +93,10 @@ you instead of deriving your own — `review-gate` captures scope once and
 passes it to both reviewers so they agree on exactly what's in scope.
 
 ## What to check
+
+For logging/error changes, read [logging guidelines](../logging-guidelines/SKILL.md)
+relative to this skill directory. Apply its safe-context and redaction rules
+to logs and propagated errors without duplicating the shared policy here.
 
 ### General (language/platform-agnostic)
 

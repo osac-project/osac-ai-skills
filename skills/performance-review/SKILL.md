@@ -3,7 +3,7 @@ name: performance-review
 description: Performance self-review of a branch's changes before PR submission. Scans everything changed since diverging from a base ref (main by default, committed, staged, and unstaged, via merge-base) for O(n)/O(n^2) hot-path issues, memory/goroutine leaks, and inefficient patterns across OSAC's Go services and Ansible/Python tooling. Use standalone before opening a PR, via review-gate (which pairs it with security-review), or via create-pr's config-driven pre-flight gate, which invokes it directly.
 allowed-tools: Read, Grep, Bash, Glob
 metadata:
-  version: "0.1.1"
+  version: "0.2.0"
 ---
 
 # Performance Review
@@ -85,6 +85,10 @@ you instead of deriving your own — `review-gate` captures scope once and
 passes it to both reviewers so they agree on exactly what's in scope.
 
 ## What to check
+
+For logging/error changes, read [logging guidelines](../logging-guidelines/SKILL.md)
+relative to this skill directory. Check retry/poll/per-item noise, duplicate
+error output, unbounded fields, and expensive work at disabled log levels.
 
 ### General
 
