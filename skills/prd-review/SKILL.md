@@ -10,16 +10,15 @@ description: |
   "is this PRD ready", "review the requirements doc", or references a PRD
   file or PR.
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # OSAC PRD Reviewer
 
 ## Overview
 
-This skill reviews a Product Requirements Document against a calibrated rubric
-with concrete scoring examples. It uses calibrated 0-2 scoring per criterion with
-hard pass/fail thresholds — no weighted averages that mask problems.
+This skill reviews a PRD against a calibrated 0-2 rubric with hard pass/fail
+thresholds.
 
 ## When to Use
 
@@ -71,13 +70,10 @@ of a Product Manager, not an engineer.
 
 ### Persona Review Gate
 
-Two persona checks apply below (criterion 1's Scoring, criterion 4's "Flag
-regardless of score"): missed or false consolidation between closely-related
-personas is an Important finding, not a WHAT deduction, as long as every
-canonical persona is still covered; a story heading for a non-canonical
-persona (most commonly an internal OSAC service) is a Suggestion unless it
-displaces a required persona's story. Full rules and examples under
-criterion 1.
+Two persona checks apply below: missed or false consolidation between
+closely-related personas is an Important finding, not a WHAT deduction, as
+long as every canonical persona is covered; a non-canonical persona heading
+is a Suggestion unless it displaces a required persona's story.
 
 ### Criteria (0-2 each, /10 total)
 
@@ -101,9 +97,9 @@ addresses the OSAC dimensions relevant to this feature:
 - **Services**: Which services (BMaaS, CaaS, VMaaS, MaaS, Enclave) are in scope?
 - **Personas**: Cloud Provider Admin, Cloud Infrastructure Admin, Tenant Admin, Tenant User — which are affected and how?
 - **Cross-cutting dimensions** (tenant onboarding, inventory, provisioning, networking, storage, installation): addressed or explicitly out of scope where relevant?
-- **Verification scope**: Milestone declares what must be demonstrably working for users (vs deferred); cross-cutting user journeys identified — detailed test plan belongs in the EP
-- **Documentation**: User-observable doc needs identified; milestone scope (in scope vs deferred); impact on existing documented workflows — detailed doc plan belongs in the EP
-- **UI**: User-observable console needs identified; persona workflows affected; milestone scope (in scope vs API/CLI-only vs deferred) — detailed UI design belongs in the EP
+- **Verification scope**: What must demonstrably work vs deferred; detailed test plan belongs in the EP
+- **Documentation**: User-observable doc needs and workflow impact; detailed doc plan belongs in the EP
+- **UI**: User-observable console needs and persona workflows; detailed UI design belongs in the EP
 - **API resources**: For each in-scope service, affected API resources listed
 
 ##### Scoring
@@ -117,6 +113,11 @@ persona heading (e.g., `### Tenant User`). Mentioning a persona in prose
 ("Cloud Infrastructure Admins are affected") without a corresponding
 `As a <persona>...` user story does not count — the reviewer cannot
 evaluate what that persona can actually do.
+
+Each user story must also explain why the persona wants the capability. The
+`so that` clause should name a user goal, pain avoided, business outcome, or
+decision enabled. If it only restates mechanics or expected state, it describes
+WHAT without establishing WHY.
 
 Personas may share a single heading and story when the capability is
 genuinely identical for both (e.g., `### Tenant Admin / Tenant User`
@@ -155,7 +156,7 @@ crowds out a required persona's actual story, in which case treat that
 persona as uncovered under the scoring below.
 
 - 0 = Vague, unclear, or describes system internals rather than user outcomes. No personas or services identified, or no per-persona user stories.
-- 1 = Ambiguous — need is partially clear but mixed with implementation, missing specifics, or missing affected personas. Or: user stories exist but some affected personas lack stories.
+- 1 = Ambiguous — need is partially clear but mixed with implementation, missing specifics, tautological user-story motivation, or missing affected personas. Or: user stories exist but some affected personas lack stories.
 - 2 = Clear, specific, user-observable capabilities. Affected personas and services identified. Each affected persona has at least one user story.
 
 See [calibration-examples.md § 1](references/calibration-examples.md#1-what--clear-user-facing-need) for W=0/1/2 worked examples, including the combined-persona-heading pattern.
@@ -169,7 +170,8 @@ Is there a clear reason this work matters — user pain, business need, or strat
 - 2 = Concrete justification — names the pain, quantifies impact, or ties to a strategic goal with a clear causal chain
 
 Take stated evidence at face value. Search the entire PRD for evidence, not
-just a dedicated section.
+just a dedicated section. User stories count only when their `so that` clauses
+explain user/business motivation, not mechanics.
 
 See [calibration-examples.md § 2](references/calibration-examples.md#2-why--business-justification) for Y=0/1/2 worked examples.
 
@@ -358,7 +360,7 @@ customer).
 ## Severity Classification
 
 - **Critical**: Any zero-scored criterion. Also: missing required sections, no personas identified, PRD reads like a design document. Also: any reference to a specific customer name, program name, or engagement name — the enhancement-proposals repo is public.
-- **Important**: Score of 1 on any criterion. Also: vague Out of Scope boundaries, weakly testable user stories or requirements, scope creep signals, requirements stated as generic capabilities without explicit use cases, content outside the PRD template's sections, unsourced numeric thresholds/SLAs, near-duplicate user stories within the same persona, compensating mechanisms for a documented platform limitation (see Right-Sized's "Flag regardless of score").
+- **Important**: Score of 1 on any criterion. Also: vague Out of Scope boundaries, weakly testable user stories or requirements, tautological user-story motivation, scope creep signals, requirements stated as generic capabilities without explicit use cases, content outside the PRD template's sections, unsourced numeric thresholds/SLAs, near-duplicate user stories within the same persona, compensating mechanisms for a documented platform limitation (see Right-Sized's "Flag regardless of score").
 - **Suggestion**: Style improvements, additional Out of Scope detail, deeper risk analysis, more specific metrics.
 
 ## Notes

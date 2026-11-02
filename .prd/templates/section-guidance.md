@@ -202,6 +202,14 @@ These apply across all sections:
 
 - Group by persona, using the standard formula: "As a {persona}, I want
   {capability} so that {outcome}."
+- The `so that` clause must explain the persona's goal, pain avoided,
+  business outcome, or decision the capability enables. Do not use it to
+  restate the capability's mechanics or expected system state. "I want to
+  pause a VM so that execution freezes" explains pause behavior; it does
+  not explain why a tenant needs pause. "I want to pause a VM so that I
+  can avoid active compute cost during a maintenance window without losing
+  in-memory application state" gives reviewers a motivation they can
+  evaluate.
 - One capability per story. If a story has "and", split it.
 - Ground each story in concrete artifacts, workflows, or scenarios — name
   the specific things users interact with, not generic capabilities.
