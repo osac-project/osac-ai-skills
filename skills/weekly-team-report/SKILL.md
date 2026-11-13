@@ -6,7 +6,7 @@ description: >-
   team summary, or a meeting-notes update with verified Jira links. Refresh
   issue states and put linked issue keys before each description.
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Weekly Team Report
@@ -35,11 +35,13 @@ missing details that materially affect scope or access:
 - **Destination:** default to a draft in the current conversation. Adapt link
   and heading syntax to the destination; do not post elsewhere automatically.
 
-Required capabilities are an authorized reader for the supplied sources and
-live, authenticated Jira reads. Use the repository-approved Jira interface;
-when running in the checkout, follow its documented Jira-client conventions.
-If a required capability is unavailable, explain the gap and request an
-accessible source or verified data rather than inventing commands or results.
+Required capabilities are an authorized reader for the supplied sources and,
+for Jira-verified reporting, live, authenticated Jira reads. Use the
+repository-approved Jira interface; when running in the checkout, follow its
+documented Jira-client conventions. If a required capability is unavailable,
+explain the gap and request accessible sources or verified data. A notes-only
+draft requires explicit user approval and complete access to required notes;
+it is not a substitute for reading an inaccessible required source.
 
 ## Workflow
 
@@ -91,6 +93,10 @@ Jira link. Say that no matching reference was found, not that no issue exists.
 If a Jira read fails, distinguish unavailable verification from an empty
 search. Stop if that prevents a reliable report, or ask whether to produce an
 explicitly notes-only draft; do not imply a successful refresh.
+In an approved notes-only draft, omit unverified issue links and attribute
+status claims to the dated notes rather than presenting them as current Jira
+states. If only some issues were verified, identify the unverified scope and
+limit refresh claims and linked bullets to the successfully verified issues.
 
 ### 4. Reconcile dates and scope
 
@@ -146,6 +152,11 @@ Decisions and next steps
 • [{ISSUE_LINK}]: {Explicit dependency, decision, or next action}.
 ```
 
+Use the refresh line only for successful verification of the stated scope.
+For an approved notes-only draft, replace its Jira clause with "Jira statuses
+not verified; notes-only draft". For partial verification, name the verified
+scope and disclose the remaining gap instead of implying a complete refresh.
+
 `ISSUE_LINK` is a destination-native hyperlink labeled with the real canonical
 issue key; braces are placeholders, not report content. For several issues,
 use `[{ISSUE_LINK}, {ISSUE_LINK}]: Description` only when the description
@@ -164,7 +175,8 @@ source documents only when the destination audience is authorized to read them.
 Before returning the draft, check:
 
 - Every factual clause has supporting evidence and an accurate date/scope.
-- Every issue link was read, is relevant, and precedes its description.
+- Every issue link was read successfully, is relevant, and precedes its
+  description; unverified work remains unlinked.
 - Grouped keys share the outcome claimed; duplicates and stale states are gone.
 - Plans, designs, reviews, QA, implementation, and releases stay distinct.
 - Required sources are complete or the user explicitly accepted exclusions.
