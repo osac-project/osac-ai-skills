@@ -6,14 +6,6 @@ block matching `$TOUCHED_COMPONENTS` — if it lists more than one, run
 covering multiple mono-repo components. Read the component's CLAUDE.md if
 unsure which commands apply.
 
-Every `make` target below was checked against each component's actual
-`Makefile` and `AGENTS.md` (`osac-operator`, `bare-metal-fulfillment-operator`
-in the consumer `osac` mono-repo checkout). The `osac-operator`/
-`bare-metal-fulfillment-operator` blocks below aren't symmetric on purpose:
-`osac-operator`'s `Makefile` has a real `test-kustomize` target and
-`bare-metal-fulfillment-operator`'s does not — confirmed by reading both
-Makefiles directly, not inferred from one and assumed for the other.
-
 ## fulfillment-service
 
 ```bash
@@ -35,7 +27,7 @@ make build
 make test
 make manifests generate && git diff --exit-code
 make check-helm-crds
-make test-kustomize
+make helm-validate
 ```
 
 ## osac-aap
