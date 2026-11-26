@@ -1,0 +1,42 @@
+# RFC 2136 DNS overlay for the `full` lab.
+#
+# Replaces environment/install/full-dns.yaml (dns.noop.dns) once the labs
+# run the osac-7921-rfc2136-on-3dc9c381 checkout. OSAC's AAP jobs then
+# create and delete the api, api-int and *.apps records themselves via
+# signed RFC 2136 updates; the external publish-guest-dns.py publisher is
+# no longer used for this lab.
+#
+# Pair with the gitignored full-rfc2136-secrets.local.yaml, which carries
+# the TSIG secret. Server 192.0.2.10 is a placeholder for the
+# hypervisor's management address, the one the AAP job pods reach through
+# the lab bridge gateway. A bridge address
+# cannot serve named: libvirt's bind-dynamic dnsmasq claims port 53 on
+# every address added to its bridges.
+#
+# Everything not DNS-class-related is carried over unchanged from
+# full-dns.yaml: guest zone names and the reserved guest ingress range
+# (192.168.160.112-114) for the CI cluster template, and operator trust
+# for the hub ingress CA.
+aap:
+  instanceGroups:
+    clusterFulfillment:
+      enabled: true
+      config:
+        DNS_CLASS: dns.rfc2136.dns
+        DNS_ZONE: full.guests.osac.test
+        HOSTED_CLUSTER_BASE_DOMAIN: full.guests.osac.test
+        EXTERNAL_ACCESS_BASE_DOMAIN: full.guests.osac.test
+        EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: full.guests.osac.test
+        CI_GUEST_INGRESS_IP_RANGE: "192.168.160.112-192.168.160.114"
+        # Primary server that accepts the signed updates (IP only).
+        DNS_RFC2136_SERVER: "192.0.2.10"
+        DNS_RFC2136_PORT: "53"
+        DNS_RFC2136_PROTOCOL: "tcp"
+        DNS_RFC2136_KEY_NAME: "osac-full-lab"
+        DNS_RFC2136_KEY_ALGORITHM: "hmac-sha256"
+        # Readiness wait queries this server directly (unsigned, UDP 53),
+        # skipping the resolver chain and its negative caches.
+        DNS_SERVER: "192.0.2.10"
+operator:
+  ignition:
+    trustIngressCA: true

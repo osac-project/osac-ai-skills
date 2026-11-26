@@ -1,0 +1,5 @@
+# Local secrets never leave this machine.
+*-secrets.local.yaml
+# TSIG key material generated on the hypervisor, if ever copied back here.
+keys/
+*.key

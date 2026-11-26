@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Get a lab ready to start a demo right now: wipe the previous state and
+# set up the demo fixtures. One command, a few minutes.
+#
+#   osac-lab-demo-ready <lab> --yes
+#
+# Phase 1 runs osac-lab-wipe (see its header for what a wipe removes and
+# keeps). Phase 2 runs the demo's own setup - the test account, its
+# network, the catalog entries and the cluster credentials - without any
+# interactive gating, exactly the way the demo's offline tests run it.
+# Phase 3 runs the demo's own scene-0 checks, so "ready to start a demo"
+# is proven by the same assertions the recording relies on.
+#
+# After this, ./demo.sh starts at scene 1 (its setup finds every fixture
+# already in place and skips over them).
+set -Eeuo pipefail
+umask 077
+
+lab_dir=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+demo=$(cd "$lab_dir/../.." && pwd)
+
+usage() {
+  printf 'Usage: osac-lab-demo-ready <lab> --yes\n' >&2
+  printf 'Labs: full, full2 (see lab-config.sh). --yes is required; the\n' >&2
+  printf 'script then asks you to type the lab name before changing anything.\n' >&2
+}
+
+lab=${1:-}
+[ $# -ge 1 ] || { usage; exit 1; }
+shift
+case "$lab" in
+  full|full2) ;;
+  *) usage; exit 1 ;;
+esac
+assumed_yes=no
+for argument in "$@"; do
+  case "$argument" in
+    --yes) assumed_yes=yes ;;
+    *) usage; exit 1 ;;
+  esac
+done
+[ "$assumed_yes" = yes ] || { usage; exit 1; }
+
+# shellcheck source=lab-config.sh
+. "$lab_dir/lab-config.sh"
+
+fail() {
+  printf '%s: %s\n' "$lab" "$*" >&2
+  exit 1
+}
+
+note() {
+  printf '%s: %s\n' "$lab" "$*"
+}
+
+started_at=$SECONDS
+
+phase_wipe() {
+  note '[1/3] wipe the previous state'
+  echo "$lab" | "$lab_dir/osac-lab-wipe" "$lab" --yes
+}
+
+phase_setup() {
+  note '[2/3] set up the demo fixtures'
+  export KUBECONFIG="$LAB_KUBECONFIG"
+  export DEMO_ROOT="$demo"
+
+  # shellcheck source=../../demo.sh
+  . "$demo/demo.sh"
+  INTERACTIVE_SECTIONS=0
+  CURRENT_SCENE=0
+
+  WORK=$(mktemp -d "${TMPDIR:-/tmp}/osac-lab-demo-ready.XXXXXXXX")
+  DOMAIN=$(oc --request-timeout=12s get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+  test "$DOMAIN" = "$LAB_DOMAIN" ||
+    fail "hub ingress domain is $DOMAIN, expected $LAB_DOMAIN"
+  LAB="$lab"
+  PUB="fulfillment-api-$NS.$DOMAIN:443"
+  PRIV="fulfillment-internal-api-$NS.$DOMAIN:443"
+  KC_URL="https://keycloak-keycloak.$DOMAIN"
+  ECHO="https://echo-adapter-$NS.$DOMAIN"
+  NODE=$(oc get nodes -o jsonpath='{.items[0].metadata.name}')
+  trap 'demo_failed "$LINENO"' ERR
+
+  setup_demo
+
+  local image subnet security_group
+  image=$(resolve_named pub TA osac.public.v1.DiskImages demo-fedora)
+  subnet=$(resolve_named pub TU osac.public.v1.Subnets default-ipv4)
+  security_group=$(resolve_named pub TU osac.public.v1.SecurityGroups default)
+  note "fixtures ready: image=$image subnet=$subnet security-group=$security_group"
+}
+
+phase_verify() {
+  note '[3/3] run the demo starting-position checks'
+  run_batch csp/check-starting-point.sh \
+    'Check the lab and the test account before making a workload.' \
+    'Six workers are free. Rules 0001 are active, and no default quotas remain.'
+  run_batch csp/check-metering-ready.sh \
+    'Check that metering is ready and has read events for the test account.' \
+    'Metering is ready. It has read events and finished a check for the test account.'
+  note "ready to start a demo: cd $demo && ./demo.sh (starts at scene 1)"
+}
+
+phase_wipe
+phase_setup
+phase_verify
+note "finished in $((SECONDS - started_at))s"

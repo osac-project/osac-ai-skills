@@ -1,0 +1,24 @@
+; OSAC demo guest DNS -- initial zone for the `full` lab.
+; Installed by setup-demo-named.sh as /var/named/dynamic/full.guests.osac.test.db.
+; After the first RFC 2136 update, named owns this file and its journal
+; (full.guests.osac.test.db.jnl); do not edit it by hand from then on.
+;
+; dns-check is the static health record that configure-lab-network.py and
+; check-lab-ready.sh query. It replaces the dnsmasq
+; host-record=dns-check.full.guests.osac.test,192.168.160.1 line.
+;
+; 60-second negative TTL: resolvers on the query chain (hub CoreDNS, guest
+; workers) may look up api.<order> before OSAC creates it; a short negative
+; cache keeps the readiness wait fast. This matches the SOA advice in
+; osac-installer/docs/dns-backend.md.
+$TTL 60
+$ORIGIN full.guests.osac.test.
+@       IN SOA  full.guests.osac.test. hostmaster.osac.test. (
+                1      ; serial (named increments it on dynamic updates)
+                3600   ; refresh
+                600    ; retry
+                604800 ; expire
+                60     ; negative cache TTL
+        )
+        IN NS   localhost.
+dns-check IN A   192.168.160.1
