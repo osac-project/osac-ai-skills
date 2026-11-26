@@ -166,6 +166,10 @@ test_project_root_override_links_consumer() {
     || fail "expected .design/templates/section-guidance.md to be a symlink under consumer"
   [[ -r "${consumer}/.design/templates/section-guidance.md" ]] \
     || fail "cannot read .design/templates/section-guidance.md via consumer symlink"
+  [[ -L "${consumer}/.design/templates/design.md" ]] \
+    || fail "expected .design/templates/design.md to be a symlink under consumer"
+  [[ -r "${consumer}/.design/templates/design.md" ]] \
+    || fail "cannot read .design/templates/design.md via consumer symlink"
   [[ -L "${consumer}/.prd/templates/section-guidance.md" ]] \
     || fail "expected .prd/templates/section-guidance.md to be a symlink under consumer"
   [[ -r "${consumer}/.prd/templates/section-guidance.md" ]] \

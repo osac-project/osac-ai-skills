@@ -37,7 +37,7 @@
 # osac/docs/, not portable skill guidance.
 # OSAC-4006: centralized shared materialization here for consumers.
 # OSAC-4008: added .design/templates and .prd/templates (section-guidance.md)
-# to this same mechanism.
+# to this same mechanism. OSAC-7883: added design.md to .design/templates.
 set -euo pipefail
 
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
@@ -80,7 +80,7 @@ RETIRED_SHARED_RULES=(architecture-patterns networking-design-alignment request-
 SHARED_AGENTS=(quick-fix)
 SHARED_HOOKS=(README)
 SHARED_DESIGN_CONTEXT=(enclave-wizard-pipeline networking-decisions osac-dimensions review-patterns)
-SHARED_DESIGN_TEMPLATES=(section-guidance)
+SHARED_DESIGN_TEMPLATES=(section-guidance design)
 SHARED_PRD_TEMPLATES=(section-guidance)
 
 LINK_CLAUDE=false

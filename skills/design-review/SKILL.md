@@ -10,7 +10,7 @@ description: |
   "is this design ready", "review PR on enhancement-proposals", or references a PR
   on osac-project/enhancement-proposals.
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
 ---
 
 # OSAC Design Document Reviewer
@@ -79,8 +79,10 @@ rather than blocking the review — the agent must always produce scores for
 all 4 dimensions.
 
 - YAML frontmatter: title, authors, creation-date, last-updated, tracking-link (full URL), prd (relative path to PRD)
-- Required sections: Summary, Motivation (Goals, Non-Goals), Proposal (Workflow Description, API Extensions, Implementation Details, Security Considerations, Failure Handling and Recovery, RBAC/Tenancy, Observability and Monitoring, Risks and Mitigations, Drawbacks), Alternatives, Test Plan
-- Conditionally required: UX Alignment (required only when a matching `@temp-api` file exists in `osac-ux/libs/ui-components/src/api/v1/`)
+- These required sections apply to designs drafted in the simplified format. For a design that predates it, score the structure it was written with and do not flag missing simplified-format sections
+- Required sections, in order: Today and with this design, How it works, Definitions, one section per step, Guard Rails, Security, Where the code goes, API (one numbered entry per affected interface first), Alternatives, Not in this design
+- Test Plan is not a design section: the detailed test plan is published as `testplan.md` and reviewed separately
+- Conditionally required: UX Alignment, when the design changes the UI, or a matching `@temp-api` file exists in `osac-ux/libs/ui-components/src/api/v1/`
 - PRD reference: the `prd:` frontmatter field or an explicit link to `prd.md` must be present — user stories and persona coverage belong in the PRD, not the design
 - Placeholder-only sections (`TBD` with no other content, or a lone `TODO:` line with no other content) count against the relevant dimension score
 - Sections that are genuinely N/A must explain why — silence is a gap
@@ -124,16 +126,29 @@ Is the implementation realistic, specific, and proportional to the scope?
 Check:
 - [ ] Implementation details are specific — names data structures, specifies error codes, defines validation rules
 - [ ] Proto schemas included for new resources (at least key fields, types, constraints)
+- [ ] API section gives one numbered entry per affected interface, so test plans can map cases to them. Padding the list to reach a count is a gap
 - [ ] No hand-waving on hard parts (e.g. vague phrases like `handle edge cases appropriately` or `implement as needed`)
 - [ ] Effort is proportional to scope
 - [ ] Workflow covers all lifecycle operations (create, get, list, update, delete)
 - [ ] Error handling and failure modes described
+- [ ] For a stateful or billing-like design, Guard Rails states the invariants: atomic writes, duplicate prevention, ordering, isolation, and crash/restart/restore/failure behavior. Missing Guard Rails on such a design is a gap
 - [ ] Risks are specific technical risks with concrete mitigations
-- [ ] Drawbacks section steel-mans the argument against the proposal
+- [ ] Trade-offs against the chosen approach appear in Risks or Alternatives (the simplified template has no Drawbacks section)
+
+Length and plain language, for a design in the simplified format (scored with this criterion):
+- [ ] At most 200 content lines, tables included (YAML frontmatter, Mermaid diagrams and code blocks excluded)
+- [ ] At most 2,000 words, tables included
+- [ ] No sentence over 25 words
+- [ ] No semicolon chains or "unless" clauses
+- [ ] No inline source markers (`[PRD: ...]`, `[Locked: D{N}]`, `[Research: §...]`)
+- [ ] N/A sections are one line
+- [ ] No repetition across sections
+
+A simplified-format design over 200 content lines cannot score 2 on this criterion.
 
 - 0 = Vague implementation — no proto schemas, hand-waving on hard parts, generic risks ("things might break")
 - 1 = Reasonable detail but gaps — some lifecycle operations missing, risks somewhat generic, thin error handling
-- 2 = Deep technical detail, proto schemas present, all lifecycle ops covered, risks with concrete mitigations
+- 2 = Key decisions specific and complete (schemas, APIs, lifecycle ops, guarantees), risks with concrete mitigations, no code-level walkthroughs
 
 **Calibration examples:**
 
@@ -169,24 +184,27 @@ explicitly defer. Silence on a relevant dimension is a gap.
 
 #### 4. Testability (0-2)
 
-Does the design describe a concrete test strategy that would catch regressions?
+Does the design give a separate test plan enough to map cases to behavior?
+
+The detailed test plan is published as `testplan.md` and reviewed separately.
+Do not require a Test Plan section in the design.
 
 Check:
-- [ ] Test plan describes strategy per level: unit, integration, e2e
-- [ ] Unit tests specify what's tested (validation logic, state transitions, error paths)
-- [ ] Integration tests describe test infrastructure (kind cluster, mocked backends, etc.)
-- [ ] E2E tests describe user-observable scenarios
-- [ ] Graduation criteria are concrete conditions, not vague milestones
+- [ ] Interfaces are numbered, or the API section states `N/A: {reason}` and the design changes no interface. For a design that predates the simplified format, an equivalent mapping by interface name is enough
+- [ ] Lifecycle operations and state transitions are described
+- [ ] Error paths and failure behavior are described
+- [ ] Validation rules and limits are stated
+- [ ] Observable outcomes are specific enough to test
 
-- 0 = No test plan, or placeholder ("tests will be added"). Graduation criteria absent or vague.
-- 1 = Test plan mentions unit/integration/e2e but lacks specifics — doesn't say what's tested or how. Graduation criteria present but generic.
-- 2 = Test plan specifies what's tested at each level with concrete scenarios. Graduation criteria are measurable conditions.
+- 0 = Behavior is too vague to test. No interface list or lifecycle detail.
+- 1 = Main paths are described. Error paths, limits, or interface mapping are missing.
+- 2 = Numbered interfaces (or a justified `N/A`), lifecycle, error paths, and limits are specific enough to map test cases.
 
 **Calibration examples:**
 
-- T=0: "Unit and integration tests will be added" — no specifics on what's tested.
-- T=1: "Unit tests for proto validation, integration tests with kind cluster" — right categories but no specific scenarios. Graduation criteria: "feature is stable."
-- T=2: "Unit tests for CIDR validation and overlap detection; integration tests for subnet creation and attachment using kind cluster with mock network backend; e2e test for full tenant workflow: create VirtualNetwork → create Subnet → attach to ComputeInstance → verify connectivity." Graduation criteria: "All CRUD operations pass e2e, error paths tested, no regressions in existing networking tests."
+- T=0: "The controller handles provisioning" with no interfaces, states, or error paths.
+- T=1: Interfaces are listed but error paths and limits are "TBD".
+- T=2: Interfaces 1-4 map to create, attach, detach, and delete. Each has error paths and limits, so test cases can reference them directly.
 
 ### Pass/Fail
 
@@ -194,7 +212,7 @@ Check:
 - **FAIL**: Total < 5 OR any zero (automatic fail regardless of total)
 
 A single zero is an automatic fail because it signals a fundamental problem
-(e.g., no test plan, or architectural misalignment). The author must fix
+(e.g., no interface list when the design changes interfaces, or architectural misalignment). The author must fix
 zero-scored criteria before resubmission.
 
 ## Output Format
@@ -211,7 +229,7 @@ Present findings as a structured review:
 | Architecture | X/2 | {pattern compliance, dependency clarity, terminology} |
 | Feasibility | X/2 | {implementation depth, proto schemas, risk quality} |
 | Scope | X/2 | {boundary clarity, persona coverage, dimension coverage} |
-| Testability | X/2 | {test strategy specificity, graduation criteria} |
+| Testability | X/2 | {interface mapping, lifecycle and error-path coverage} |
 | **Total** | **X/8** | **PASS / FAIL** |
 
 ### Verdict: {PASS / FAIL}
@@ -266,7 +284,7 @@ than naming the program or customer).
 
 - Score based on what's in the design, not what you think should be there
 - Use `osac-dimensions.md` to decide relevance per dimension — skip Networking for a storage-only design. When a dimension is relevant, require address-or-defer — silence is a gap
-- Reference merged designs in `enhancement-proposals/enhancements/` for calibration on depth and style
+- Reference merged designs in `enhancement-proposals/enhancements/` for calibration on structure only. Length is not a quality signal. Shorter is better when the decisions are covered.
 - Push for specificity: "handle errors" is not a mitigation; "retry with exponential backoff, circuit-break after 3 failures" is
 - The review process requires consensus from all stakeholders — flag sections that would likely trigger stakeholder questions
 

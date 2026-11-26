@@ -1,188 +1,190 @@
-# OSAC Design Document (EP) — Section Guidance
+# OSAC Design Document — Section Guidance
 
-Instructions for the AI on how to fill each section of the OSAC design template.
-This file is read during the `/draft` phase. It is not included in the final output.
+Instructions for the AI on how to fill the design template (`design.md`).
+Read during the `/draft` phase. Not part of the final output.
+
+## Length
+
+- Hard cap: 200 lines. Target: 150. Count every line, tables included. Only
+  Mermaid diagrams, code blocks and the YAML frontmatter do not count.
+- Hard cap: 2,000 words in total, tables included.
+- Moving text into tables, lists or code to get under the cap does not count as
+  cutting. A table row is a line.
+- Over the cap means the design carries detail that belongs in the code, or it
+  is two designs. Cut detail or propose a split. Never squeeze the same content
+  into fewer, longer sentences.
+- Cut in this order: content the PRD already states, implementation mechanics
+  (function names, step-by-step code flow), repetition, explanations of obvious
+  choices, low-risk alternatives.
+- Never cut a rule that keeps results correct: atomic writes, duplicate
+  prevention, crash and restore behavior.
+
+## Plain language
+
+These rules follow ASD-STE100 Simplified Technical English
+(https://www.asd-ste100.org/), restated in our own words.
+
+- At most 25 words per sentence. One claim per sentence. At most six sentences
+  per paragraph.
+- Active voice. Say who does what: "the fulfillment controller writes X to the
+  ComputeInstance", not "X is projected into the hub".
+- Use one word for one meaning, and the same word every time. Use the names the
+  code uses. Spell out each acronym once.
+- Prefer common words. When a concrete word exists, do not use abstract filler:
+  contract, boundary, surface, shape, carry, hold, envelope, project/projection
+  (as a verb), intent, posture, semantics.
+- No semicolons. No "if/when/unless/only when" chains. When behavior depends on
+  conditions, write a table of condition -> behavior.
+- Define a term by what it is, never by what it is not. Put each definition on
+  its own line, not in parentheses inside a rule.
+- Write at level 1 or 2 of this ladder:
+  - Level 1: "Uploads over the limit fail."
+  - Level 2: "The upload service rejects files over the limit."
+  - Level 4: "The ingestion layer enforces quota-based admission control on
+    inbound payloads."
+
+## Short on purpose
+
+- The design is short by design: 150 lines target, 200 hard cap, 2,000
+  words. A simple feature aims for 120 to 150 lines.
+- Detail belongs in the implementation PRs and the decomposed stories. The
+  design carries what a reviewer must approve and an implementer must know.
+- A failure, an upgrade step or a size limit that changes what users see is a
+  numbered point in its step section. It never gets its own section.
 
 ## General Rules
 
-These apply across all sections:
-
 - **No customer or engagement names.** The `enhancement-proposals` repository
-  is public. Never reference specific customer names, program names,
-  engagement names, or other confidential business information in design
-  document content. Describe design context in terms of the technical
-  capability or deployment scenario, not who requested it. If source
-  material references specific customers, abstract them into generic
-  language (e.g., "a sovereign-cloud deployment" rather than naming the
-  program or customer).
-- **Favor conciseness.** Long design documents don't get read. Every sentence should earn its place.
+  is public. Describe the context as a technical capability, not as who asked.
 - Write in third person, present tense.
-- **Be specific.** No vague language: "efficient data structure" -> name the structure. "Appropriate caching" -> specify the cache strategy and invalidation approach. "Standard error handling" -> define the error taxonomy.
-- Every design decision must be traceable to source material. Use source markers at the end of statements: `[PRD: FR-3]`, `[PRD: NFR-2]`, `[PRD: §2.1]`, `[Locked: D{N}]`, `[User]`, `[Assumption]`, `[Codebase: path/to/file]`.
-- **Consolidate markers.** When most design decisions trace to the same PRD, tagging every statement with `[PRD: §X.Y]` adds noise without aiding traceability. Instead:
-  - Tag each decision with its specific source(s) only when the source is non-obvious or differs from the primary PRD.
-  - Rely on the YAML frontmatter's `tracking-link` and `prd` fields for the overall reference.
-  - Reserve inline markers for clarification-derived changes (`[Locked: D{N}]`), direct user instructions (`[User]`), codebase-derived decisions (`[Codebase: ...]`), and assumptions (`[Assumption]`).
-- **Incorporate, don't narrate.** When a clarification or PRD revision changed the scope or corrected an assumption, write the design decision in its final form. Do not describe what the original PRD said, what was removed, or why a previous position was abandoned.
-- Do NOT invent requirements. If the PRD doesn't specify something, either mark it as an assumption or flag it as an open question.
-- If information is unavailable, write "To be determined — {what's needed}".
-- **No scope reduction.** Never use "simplified version", "v2", "placeholder", or "future enhancement" to silently reduce scope. If something won't fit, say so explicitly and propose a split.
-- **Formatting restraint.** Use bold sparingly for genuine emphasis. When every noun phrase is bold, nothing stands out.
-- **Diagrams:** Use Mermaid diagrams when they add clarity. Any Mermaid diagram type is allowed. Every diagram **must** be accompanied by narrative explaining what it shows and what the reader should take away.
-  - Keep diagrams simple: labeled nodes, clear edge labels, no styling directives (`style`, `classDef`, color codes).
-  - Do not use ASCII art or PlantUML.
-- **Keep all required headers.** The enhancement-proposals repo enforces required sections via a linter CI job. If a section does not apply, explain why but do not remove it.
+- **No inline source markers.** Never write `[PRD: ...]`, `[Locked: D{N}]` or
+  `[Research: §...]` in the text. The frontmatter `prd` field covers the PRD.
+- **Say each fact once.** Do not restate a fact in another section. Link to
+  the section that states it.
+- **Incorporate, don't narrate.** Write a changed decision in its final form.
+  Do not describe what the PRD first said or why a position was dropped.
+- Do not invent requirements. If the PRD does not specify something, mark it
+  as an assumption or an open question. Missing information is "To be
+  determined — {what's needed}".
+- **Formatting restraint.** Bold is for genuine emphasis. When every noun
+  phrase is bold, nothing stands out.
+- **Diagrams:** Mermaid only. A box per cluster or server, holding only the
+  parts this design is about. Label every node and mark new parts. Arrows
+  show the main flow only. No styling directives, ASCII art or PlantUML.
+- **Keep all required headers.** There is no header linter. Reviewers and the
+  automated review expect these topics. A section that does not apply gets one
+  line, "N/A: {reason}", and nothing more.
 
 ## Per-Section Guidance
 
 ### YAML Frontmatter
 
-- **title**: Lowercase slug with hyphens (e.g., `networking-api`, `bare-metal-fulfillment`)
-- **authors**: The human who owns or requested this feature — never the AI assistant. Derive from `git config user.email` if available; otherwise ask the user before continuing (e.g., `agentil@redhat.com`)
-- **creation-date**: ISO date format (YYYY-MM-DD)
-- **last-updated**: ISO date format, update when making significant changes
-- **tracking-link**: Full Jira URL (e.g., `https://redhat.atlassian.net/browse/OSAC-356`)
-- **prd**: Relative path to the PRD document (typically `prd.md`)
-- **see-also**: Related enhancements as paths (e.g., `/enhancements/networking`)
-- **replaces/superseded-by**: Usually `N/A` for new proposals
+- **authors** is the human who owns or requests this feature, never the AI
+  assistant. Derive it from `git config user.email`, or ask the user.
+- The other fields follow the template placeholders: slug title, ISO dates,
+  Jira URL, and the PRD path (`prd.md`).
 
-### Summary
+### Title and first paragraph
 
-1-2 sentences. What this design achieves and the technical approach. End with a PRD reference: "See [PRD](prd.md) for detailed requirements." A reader should understand the scope of this document after reading only this section.
+- Three to five sentences: what the system does after this design, the main
+  new parts, and what each role gets. A reader who stops here knows the scope.
+- Then one line: "Design for {feature} ({JIRA}). See the [PRD](prd.md)."
+- Get the developer's yes on this paragraph before writing the rest.
 
-### Motivation
+### Today and with this design
 
-2-4 paragraphs. Restate the problem in implementation terms for technical reviewers. Explain the current system's limitations and why this approach is proposed.
+- One table, at most five rows, when the design changes something that
+  exists. Each row names an aspect a person notices, then today and after.
 
-Do NOT include user stories — those are in the PRD. Do not duplicate the PRD's problem statement. Bridge from it: assume the reader may not have read the PRD and needs enough context to understand the design decisions, but direct them to the PRD for the full picture.
+### How it works
 
-### Goals
+- One Mermaid architecture diagram, at most 8 boxes. Then one bullet per
+  step, three to five steps: a bold verb and one sentence.
+- End with "Each step has its own section below."
 
-- Design-scoped goals that constrain the implementation approach, not product outcomes. "Reuse the existing controller reconciliation pattern" is a design goal. "Tenants can create VirtualNetworks" is a product goal (belongs in the PRD).
-- 3-5 goals, each one sentence.
+### Definitions
 
-### Non-Goals
+- Only words a new team member would have to look up. At most six, one line
+  each.
 
-- Prevent scope creep at the implementation level. "Multi-region support" or "quota enforcement" are typical OSAC non-goals.
-- 2-4 non-goals, each one sentence.
+### Step sections
 
-### Proposal
+- One section per step from "How it works", in the same order and names.
+  Numbered points run straight through the design.
+- Each point makes one claim in its first sentence, with at most two
+  sentences after it.
+- The sequence diagram, if any, goes in the step it shows. At most one, with
+  at most 4 participants and 8 messages.
+- A point must make a reviewer decide something or an implementer build
+  something. If it does neither, cut it.
 
-1-2 paragraphs introducing the key resources/APIs at a high level. Explain how they relate and why each is needed. For OSAC, this typically means naming the new CRDs, gRPC services, and controller changes.
+### Guard Rails
 
-### Workflow Description
+- Required. Never cut this section for length.
+- It holds the invariants that keep results correct: atomic writes, duplicate
+  prevention, ordering, tenant isolation. It also states what happens on
+  crash, restart, restore and failure.
+- One numbered sentence per rule. Write "N/A: {reason}" only when the design
+  truly has no such invariant.
+- A design without this section is incomplete for a stateful or billing-like
+  system.
 
-- Define actors using OSAC personas (Provider, Tenant, Admin).
-- Enumerate the steps a user takes to use the feature, starting from a defined starting state.
-- Be explicit about APIs involved (gRPC, REST, kubectl).
-- Include error handling and alternative paths (what if resource already exists? what if quota exceeded?).
-- Use Mermaid sequence diagrams for multi-step interactions.
+### Security
 
-### API Extensions
+- The security rules: input validation, authorization changes, data
+  exposure, and how the feature enforces tenant isolation.
+- If the feature inherits the existing security model, say so in one line
+  and why that is enough. Do not invent concerns that do not apply.
 
-For OSAC, this typically includes:
-- New gRPC services in fulfillment-service (e.g., `VirtualNetworks`, `Subnets`)
-- New CRDs in osac-operator (e.g., `VirtualNetwork`, `Subnet`)
-- Webhooks for validation/defaulting
-- Finalizers for cleanup
-- Changes to existing resources owned by other teams
+### Where the code goes
 
-List each extension and note operational impact (what happens if the controller is down?).
+- Three lines: new, changed, unchanged. Name components and repositories.
+  "Unchanged" names the APIs, CRDs or protos that stay as they are.
 
-### Implementation Details/Notes/Constraints
+### API
 
-This is where technical depth lives. Include:
-- Proto schema snippets following the standard object shape (`id`, `Metadata`, `<Type>Spec`, `<Type>Status`) and conventions in [`osac/fulfillment-service/docs/API.md`](https://github.com/osac-project/osac/blob/main/fulfillment-service/docs/API.md) — spec for desired state, status for observed state, conditions for lifecycle, declarative design (no imperative methods)
-- Database schema considerations (new tables, migrations)
-- Controller reconciliation logic (state machine, finalizer flow)
-- Integration with existing OSAC components (fulfillment-service, osac-operator, osac-aap)
+- Give one numbered entry per interface the design adds or changes: each
+  proto service or method, CRD, topic or route. Do not pad the list, and do
+  not invent an interface to reach a count. Test plans map cases to these
+  entries. If the design changes no interface, write "N/A: {reason}".
+- Then give the routes and config values as one short table or list. Each
+  new config value states its default and who sets it.
 
-### Security Considerations
+### UX Alignment
 
-- Cover input validation, authentication/authorization changes, and data exposure risks.
-- For multi-tenant features, describe how tenant isolation is enforced: OPA policies, namespace scoping, `osac.openshift.io/tenant` annotation filtering.
-- If the feature inherits the existing security model without changes, state that and explain why it's sufficient.
-- Do not invent security concerns that don't apply.
+- Include this section when the feature changes the UI, or when a matching
+  `@temp-api` file exists in `osac-ux/libs/ui-components/src/api/v1/`. Name the
+  screens or components and the osac-ux guidance it follows. Omit it otherwise.
 
-### Failure Handling and Recovery
+### Alternatives
 
-- Enumerate concrete failure modes (not generic categories).
-- For each: what happens, how the system recovers, what the user sees.
-- Cover controller-side failures (reconciliation errors, stale caches), API-side failures (validation, database errors), and integration failures (AAP job timeouts, network provisioning failures).
-- Note retry behavior and idempotency guarantees.
-- For controllers: describe behavior when the controller is restarted mid-reconciliation.
+- At most three lines, one per alternative: the alternative and why not, in
+  one sentence. Include "Do nothing" when a reviewer would ask about it.
 
-### RBAC / Tenancy
+### Not in this design
 
-- All new resources MUST include tenant isolation metadata: `osac.openshift.io/tenant` for tenant scoping, `osac.openshift.io/owner-reference` for resource hierarchy.
-- Describe how OPA policies enforce isolation at runtime.
-- Note visibility constraints: can a tenant see resources from other tenants? What about platform-defined resources (NetworkClass, PublicIPPool)?
-- If no RBAC or tenancy changes: "No RBAC or tenancy changes required." with brief justification.
+- One line naming the deferrals, with Jira keys where known.
+- Unresolved questions go here as "Open: ...", at most three. When review
+  resolves one, write the answer into its section and remove the entry.
 
-### Observability and Monitoring
+## Before finishing
 
-- List new Prometheus metrics, Kubernetes events, and structured log events.
-- For metrics: name, type (counter/gauge/histogram), labels, and what threshold indicates a problem.
-- For events: type (Normal/Warning), reason, and when it fires.
-- If none: "No new observability changes. Existing monitoring mechanisms apply."
+- Count the lines. Exclude only Mermaid diagrams, code blocks and the
+  frontmatter. Tables count. If the count is over 200, cut and count again.
+- Count the words, tables included. If the count is over 2,000, cut.
+- Find any sentence over 25 words and split it.
+- Search for semicolons, "unless", "only when", and "not the"/"rather than"
+  definitions. Rewrite each one.
+- Check that every correctness rule from your notes appears in Guard Rails.
+  Search for "atomic", "duplicate", "idempotent" and "isolation".
+- Read only the headings and the first sentence of each paragraph or bullet.
+  They must tell the whole design.
 
-### Risks and Mitigations
+## Applying review feedback
 
-- Technical risks only (product risks are in the PRD).
-- Each risk should have a concrete mitigation strategy or be flagged as "To be determined."
-- Consider: version skew, performance bottlenecks, security exposure, backwards compatibility, cross-component coordination.
-
-### Drawbacks
-
-- Steel-man argument against the proposal.
-- What trade-offs must be made? Maintenance burden? API complexity?
-- How do we justify them?
-
-### Alternatives (Not Implemented)
-
-- At least one alternative for each non-trivial design decision.
-- Include "Do nothing" if applicable.
-- For each: brief description, pros, cons, rejection reason.
-- Be honest about trade-offs.
-
-### Open Questions
-
-- Each open question gets its own numbered subsection with **Owner** (person or team who should answer) and **Impact** (which section or decision the answer affects). Derive the Owner from source material — do not default to the document's authors. If not evident, write "To be determined."
-- Frame as clear, answerable questions directed at reviewers.
-- **Transient by design.** When resolved during PR review, the answer is incorporated into the relevant section and the entry removed.
-- **Design scope only.** No process-level actions.
-- This section is **optional**. If no open questions remain after drafting, omit it entirely.
-
-### Test Plan
-
-- List concrete test scenarios under each sub-section (Unit, Integration, E2E) — not general strategy.
-- Each scenario should be specific enough that an implementer knows what to build (e.g., "validation rejects overlapping CIDRs" not "test validation").
-- Call out tricky areas: CIDR parsing, dual-stack, concurrent reconciliation.
-- Reference OSAC test patterns: Ginkgo for unit/integration tests, pytest for e2e (via osac-test-infra).
-- If details depend on implementation: "Test plan will be developed during implementation. Expected coverage: [describe what will be tested]."
-
-### Graduation Criteria
-
-- If not targeting a release: "Graduation criteria will be defined when targeting a release. Expected stages: Dev Preview -> Tech Preview -> GA based on production deployment feedback."
-- If targeting a release: define maturity levels and success signals.
-
-### Upgrade / Downgrade Strategy
-
-- For new APIs: "This is a new API with no upgrade impact. Downgrade requires deleting all instances of the new resources before reverting."
-- For changes to existing APIs: describe migration steps and backward compatibility.
-
-### Version Skew Strategy
-
-- Describe how fulfillment-service and osac-operator handle version skew during upgrades.
-- Note any CRD version migration requirements.
-
-### Support Procedures
-
-- Failure detection: describe symptoms (events, metrics, alerts, log output).
-- Disabling: how to disable the feature and consequences on cluster health, existing workloads, and new workloads.
-- Recovery: how to re-enable and whether consistency is maintained.
-
-### Infrastructure Needed
-
-- Usually "None" for OSAC EPs.
-- If needed: specify new test infrastructure, repos, or CI changes.
+- A reviewer's question marks the point that caused it. Rewrite that point
+  so the question cannot come up. Never add an "unless ..." or "only when"
+  clause to an existing sentence.
+- A question about a detail that does not change the design gets its answer
+  in the PR thread, not in the design.
+- Each revision round: rerun "Before finishing".
