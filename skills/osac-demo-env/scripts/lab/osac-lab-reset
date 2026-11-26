@@ -1,0 +1,692 @@
+#!/usr/bin/env bash
+# Factory-reset an OSAC demo lab hub to its fresh-install state.
+#
+#   osac-lab-reset <lab> --yes
+#
+# A lab is one of the SNO hubs in lab-config.sh. The reset removes every
+# demo resource by tearing the OSAC Helm releases out and reinstalling
+# them from the pinned installer worktree. Phases, in order:
+#
+#   1 preflight        verify the target, the pins and the operator's intent
+#   2 teardown guests  delete ClusterOrders and guest namespaces, wait for
+#                      the six BMH workers to return to available
+#   3 stop and strip  scale the osac and bmf operators to 0, delete every
+#                      osac.openshift.io custom resource, and remove the
+#                      now-orphaned finalizers so the deletions complete
+#   4 uninstall osac   helm uninstall the osac release, delete the osac
+#                      namespace and the tenant namespaces, delete the
+#                      kept osac CRDs
+#   5 uninstall infra  helm uninstall osac-infra, then remove the Kafka
+#                      custom resources and data volumes so the next
+#                      install starts with empty databases
+#   6 reinstall        make install-infra + install-osac from the pinned
+#                      osac-7921-rfc2136 worktree, with the RFC 2136 DNS
+#                      overlays and the same pins as the runbook
+#   7 verify           check-lab-ready.sh plus the worker and Ironic checks
+#
+# The SNO hub itself, the osac-deps operators and the host-inventory
+# BareMetalHost definitions are never reset. Billing data is removed only
+# by deleting the database volumes and reinstalling: this script never
+# deletes database rows, finalizers or ConfigMaps.
+#
+# Every phase checks the current state first and skips what is already
+# done, so a failed run can be re-run as-is. Any unexpected state stops
+# the script with the evidence commands to run next.
+set -Eeuo pipefail
+umask 077
+
+lab_dir=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+demo=$(cd "$lab_dir/../.." && pwd)
+
+usage() {
+  printf 'Usage: osac-lab-reset <lab> --yes\n' >&2
+  printf 'Labs: full, full2 (see lab-config.sh). --yes is required; the\n' >&2
+  printf 'script then asks you to type the lab name before changing anything.\n' >&2
+}
+
+lab=${1:-}
+[ $# -ge 1 ] || { usage; exit 1; }
+shift
+case "$lab" in
+  full|full2) ;;
+  *) usage; exit 1 ;;
+esac
+assumed_yes=no
+for argument in "$@"; do
+  case "$argument" in
+    --yes) assumed_yes=yes ;;
+    *) usage; exit 1 ;;
+  esac
+done
+[ "$assumed_yes" = yes ] || { usage; exit 1; }
+
+# shellcheck source=lab-config.sh
+. "$lab_dir/lab-config.sh"
+# shellcheck source=lab-lib.sh
+. "$lab_dir/lab-lib.sh"
+
+export KUBECONFIG="$LAB_KUBECONFIG"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/osac-lab-reset.XXXXXXXX")
+errfile=$WORK/command-error.log
+
+fail() {
+  printf '%s: %s\n' "$lab" "$*" >&2
+  exit 1
+}
+
+note() {
+  printf '%s: %s\n' "$lab" "$*"
+}
+
+
+# Same, across all namespaces.
+kind_names_all() { # kind
+  local kind=$1 output
+  if output=$(oc get "$kind" -A -o name 2>"$errfile"); then
+    printf '%s' "$output"
+    return 0
+  fi
+  case "$(cat "$errfile")" in
+    *"the server doesn't have the resource type"*) return 0 ;;
+    *)
+      printf '%s: oc get %s failed:\n%s\n' "$lab" "$kind" "$(cat "$errfile")" >&2
+      return 1
+      ;;
+  esac
+}
+
+
+namespace_absent() {
+  [ -z "$(namespace_name "$1")" ]
+}
+
+# Print the Helm release status, or "absent". Anything but a missing
+# release is an error.
+helm_release_status() { # release namespace
+  local release=$1 namespace=$2 output
+  if output=$(helm status "$release" -n "$namespace" -o json 2>"$errfile"); then
+    printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["status"])'
+    return 0
+  fi
+  case "$(cat "$errfile")" in
+    *"release: not found"*) printf 'absent' ;;
+    *)
+      printf '%s: helm status %s failed:\n%s\n' "$lab" "$release" "$(cat "$errfile")" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Print the release's name while it still exists, nothing once gone.
+helm_release_name() { # release namespace
+  local status
+  status=$(helm_release_status "$1" "$2")
+  if [ "$status" = absent ]; then
+    return 0
+  fi
+  printf '%s' "$1"
+}
+
+
+
+kafka_pod_names() {
+  local output
+  if output=$(oc -n "$KAFKA_NS" get pods -l "strimzi.io/cluster=$KAFKA_NAME" -o name 2>"$errfile"); then
+    printf '%s' "$output"
+    return 0
+  fi
+  printf '%s: listing Kafka pods failed:\n%s\n' "$lab" "$(cat "$errfile")" >&2
+  return 1
+}
+
+osac_crd_names() {
+  oc get crd -o custom-columns=NAME:.metadata.name --no-headers 2>"$errfile" |
+    sed -n '/\.osac\.openshift\.io$/p' ||
+    { printf '%s: listing CRDs failed:\n%s\n' "$lab" "$(cat "$errfile")" >&2; return 1; }
+}
+
+
+# Fail loudly unless the six workers are available, labelled default,
+# error-free and unconsumed. Prints the per-worker problems otherwise.
+check_workers() {
+  oc -n "$HOST_INVENTORY_NS" get bmh -o json | python3 -c '
+import json
+import sys
+
+count = int(sys.argv[1])
+items = json.load(sys.stdin)["items"]
+problems = []
+if len(items) != count:
+    problems.append("expected %d BareMetalHosts, found %d" % (count, len(items)))
+for item in items:
+    name = item["metadata"]["name"]
+    state = (item.get("status") or {}).get("provisioning", {}).get("state")
+    label = (item["metadata"].get("labels") or {}).get("osac.openshift.io/host-type")
+    consumer = (item.get("spec") or {}).get("consumerRef")
+    error = (item.get("status") or {}).get("errorType", "")
+    if state != "available":
+        problems.append("%s is %s, not available" % (name, state))
+    if label != "default":
+        problems.append("%s lacks the osac.openshift.io/host-type=default label" % name)
+    if consumer is not None:
+        problems.append("%s is still consumed by %s %s" % (name, consumer.get("kind"), consumer.get("name")))
+    if error:
+        problems.append("%s reports errorType %s" % (name, error))
+for problem in problems:
+    print("  " + problem)
+if problems:
+    raise SystemExit(1)
+print("%d workers are available, labelled default, with no consumers" % count)
+' "$WORKER_COUNT"
+}
+
+wait_workers_available() { # timeout_seconds
+  local timeout=$1
+  local deadline=$((SECONDS + timeout)) report
+  while true; do
+    if report=$(check_workers); then
+      note "$report"
+      return 0
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      printf '%s: timed out after %ss waiting for the workers to return to available:\n%s\n' "$lab" "$timeout" "$report" >&2
+      printf 'Nothing was forced. Evidence commands:\n' >&2
+      printf '  oc -n %s get bmh -o wide\n' "$HOST_INVENTORY_NS" >&2
+      printf '  oc -n %s get clusterorders -o custom-columns=NAME:.metadata.name,FINALIZERS:.metadata.finalizers\n' "$OSAC_NS" >&2
+      printf '  oc -n %s logs deployment/osac-operator --tail=100\n' "$OSAC_NS" >&2
+      return 1
+    fi
+    printf '%s: waiting for the workers to be released:\n%s\n' "$lab" "$report"
+    sleep 15
+  done
+}
+
+phase_preflight() {
+  note '[1/7] preflight'
+  for tool in oc helm python3 git; do
+    command -v "$tool" >/dev/null || fail "$tool is not on PATH"
+  done
+  test -r "$LAB_KUBECONFIG" || fail "kubeconfig $LAB_KUBECONFIG is not readable"
+  test -d "$LAB_CHECKOUT" ||
+    fail "installer worktree $LAB_CHECKOUT does not exist"
+  test "$(git -C "$LAB_CHECKOUT" branch --show-current)" = "$LAB_INSTALL_BRANCH" ||
+    fail "installer worktree is on branch $(git -C "$LAB_CHECKOUT" branch --show-current), expected $LAB_INSTALL_BRANCH"
+  test "$(git -C "$LAB_CHECKOUT" rev-parse HEAD)" = "$LAB_INSTALL_HEAD" ||
+    fail "installer worktree head is $(git -C "$LAB_CHECKOUT" rev-parse HEAD), expected the pin $LAB_INSTALL_HEAD; update the pin deliberately"
+  test -r "$AAP_LICENSE_FILE" || fail "AAP license $AAP_LICENSE_FILE is not readable"
+  python3 -m zipfile -t "$AAP_LICENSE_FILE" >/dev/null ||
+    fail "AAP license $AAP_LICENSE_FILE is not a valid ZIP archive"
+  test -r "$SCHEMA_PATCH" || fail "schema patch $SCHEMA_PATCH is not readable"
+  test -r "$demo/environment/install/pinned-images.yaml" ||
+    fail "$demo/environment/install/pinned-images.yaml is not readable"
+  test -r "$LAB_DNS_DIR/$LAB_DNS_OVERLAY" ||
+    fail "DNS overlay $LAB_DNS_DIR/$LAB_DNS_OVERLAY is not readable"
+  test -r "$LAB_DNS_DIR/$LAB_DNS_SECRETS" ||
+    fail "TSIG secret file $LAB_DNS_DIR/$LAB_DNS_SECRETS is missing; run setup-demo-named.sh on the hypervisor and copy the key secret into it (see $LAB_DNS_DIR/README.md)"
+  test -r "$demo/environment/install/check-lab-ready.sh" ||
+    fail "$demo/environment/install/check-lab-ready.sh is not readable"
+
+  # The AAP project pin decides which source the synced project runs from.
+  # Either known pin is accepted; anything else is refused.
+  local project_pin
+  project_pin=$(sed -n 's/^[[:space:]]*projectGitBranch:[[:space:]]*//p' \
+    "$demo/environment/install/pinned-images.yaml")
+  case "$project_pin" in
+    "$PROJECT_PIN_OLD"|"$PROJECT_PIN_RFC2136")
+      note "AAP project pin: $project_pin"
+      ;;
+    *)
+      fail "aap.configAsCode.projectGitBranch in pinned-images.yaml is '$project_pin'; expected $PROJECT_PIN_OLD or $PROJECT_PIN_RFC2136"
+      ;;
+  esac
+
+  local server domain
+  server=$(oc --request-timeout=12s config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+  test "$server" = "$LAB_API_SERVER" ||
+    fail "kubeconfig points at $server, expected $LAB_API_SERVER"
+  domain=$(oc --request-timeout=12s get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+  test "$domain" = "$LAB_DOMAIN" ||
+    fail "hub ingress domain is $domain, expected $LAB_DOMAIN"
+
+  printf '%s: this reset DESTROYS on %s:\n' "$lab" "$LAB_API_SERVER"
+  printf '  every guest cluster, its workers, and its data\n'
+  printf '  every tenant, project, quota and metering record, including\n'
+  printf '  approved billing rules such as 0002\n'
+  printf '  every demo VM and volume on the hub\n'
+  printf '%s: this reset KEEPS: the SNO hub, the osac-deps operators,\n' "$lab"
+  printf 'the %s registered workers, and the guest DNS service on the hypervisor.\n' "$WORKER_COUNT"
+  printf 'Type the lab name "%s" to continue: ' "$lab"
+  local answer
+  if ! IFS= read -r answer; then
+    fail 'no confirmation could be read; nothing was changed'
+  fi
+  test "$answer" = "$lab" ||
+    fail 'confirmation did not match the lab name; nothing was changed'
+}
+
+phase_teardown_guests() {
+  note '[2/7] teardown guests'
+  local orders hosted namespaces
+  orders=$(kind_names_in clusterorders "$OSAC_NS")
+  hosted=$(kind_names_all hostedclusters)
+  namespaces=$(guest_namespaces)
+  if [ -z "$orders" ] && [ -z "$hosted" ] && [ -z "$namespaces" ]; then
+    note 'no ClusterOrders, hosted clusters or guest namespaces'
+    return 0
+  fi
+
+  if [ -n "$orders" ]; then
+    note "deleting ClusterOrders:$(printf '%s' "$orders" | tr '\n' ' ')"
+    oc -n "$OSAC_NS" delete clusterorder --all --wait=false
+    wait_names_gone 'the ClusterOrders to finish deprovisioning' "$WAIT_GUESTS" \
+      kind_names_in clusterorders "$OSAC_NS" ||
+      fail 'ClusterOrders did not finish deprovisioning; see the names above'
+  fi
+
+  hosted=$(kind_names_all hostedclusters)
+  if [ -n "$hosted" ]; then
+    note "deleting leftover hosted clusters:$(printf '%s' "$hosted" | tr '\n' ' ')"
+    local hosted_name
+    for hosted_name in $hosted; do
+      oc delete "$hosted_name"
+    done
+    wait_names_gone 'the hosted clusters to be removed' "$WAIT_GUESTS" \
+      kind_names_all hostedclusters ||
+      fail 'hosted clusters did not finish deleting; see the names above'
+  fi
+
+  namespaces=$(guest_namespaces)
+  if [ -n "$namespaces" ]; then
+    note "deleting leftover guest namespaces:$(printf '%s' "$namespaces" | tr '\n' ' ')"
+    local namespace
+    for namespace in $namespaces; do
+      oc delete namespace "$namespace" --wait=false
+    done
+    wait_names_gone 'the guest namespaces to be deleted' "$WAIT_GUESTS" \
+      guest_namespaces ||
+      fail 'guest namespaces did not finish deleting; see the names above'
+  fi
+
+  # The workers are only waited for when orders existed: leftover worker
+  # bindings without orders are stripped in the next phase and re-checked
+  # before the reinstall.
+  if [ -n "$orders" ]; then
+    wait_workers_available "$WAIT_GUESTS" ||
+      fail 'the workers did not return to available'
+  fi
+}
+
+
+
+phase_stop_and_strip() {
+  note '[3/7] stop the OSAC deployments and strip the custom resources'
+  # Everything OSAC-owned goes down, not just the operators: the
+  # fulfillment service re-creates the builtin tenants and the
+  # networkclass from the registrations while it runs, which would keep
+  # the strip from converging. AAP stays up; its operator finalizes the
+  # AAP custom resource during the namespace deletion in phase 4.
+  local deploy
+  while IFS= read -r deploy; do
+    deploy=${deploy#deployment.apps/}
+    case "$deploy" in osac-aap-*) continue ;; esac
+    oc -n "$OSAC_NS" scale deploy "$deploy" --replicas=0
+  done < <(oc -n "$OSAC_NS" get deploy -o name)
+  for deploy in $(oc -n "$OSAC_NS" get deploy -o name); do
+    deploy=${deploy#deployment.apps/}
+    case "$deploy" in
+      osac-aap-*) continue ;;
+      osac-operator-console-proxy) continue ;;
+    esac
+    wait_until_replicas_zero "$deploy" "$WAIT_STRIP"
+  done
+  strip_all_kinds
+}
+
+wait_until_replicas_zero() { # deployment timeout
+  local deployment=$1 timeout=$2
+  local deadline=$((SECONDS + timeout)) replicas
+  while true; do
+    # status.replicas is absent (empty) when a deployment holds no pods;
+    # that is zero, not a failure to read.
+    replicas=$(oc -n "$OSAC_NS" get deploy "$deployment" -o jsonpath='{.status.replicas}' 2>/dev/null || true)
+    [ -z "$replicas" ] && replicas=0
+    if [ "$replicas" = 0 ]; then
+      note "$deployment is scaled to zero"
+      return 0
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      printf '%s: %s did not scale down within %ss\n' "$lab" "$deployment" "$timeout" >&2
+      return 1
+    fi
+    sleep 5
+  done
+}
+
+phase_uninstall_osac() {
+  note '[4/7] uninstall osac'
+  local kind names tenants
+  if [ "$(helm_release_status osac "$OSAC_NS")" = absent ] &&
+    [ -z "$(kind_names_in aap "$OSAC_NS")" ] &&
+    namespace_absent "$OSAC_NS" &&
+    [ -z "$(tenant_namespaces)" ]; then
+    note 'the osac release, its namespace and the tenant namespaces are already gone'
+    return 0
+  fi
+
+  # The strip phase must have cleared every demo instance: a CRD cannot
+  # be deleted while any instance still holds a finalizer. The builtin
+  # tenants are excluded: the service re-creates them, and the osac
+  # namespace deletion in this phase removes them with everything else.
+  for kind in $OSAC_CRD_KINDS; do
+    names=$(demo_kind_names "$kind" "$OSAC_NS")
+    test -z "$names" ||
+      fail "unexpected $kind still present after the strip phase: $names"
+  done
+
+  if [ "$(helm_release_status osac "$OSAC_NS")" != absent ]; then
+    note 'helm uninstall osac'
+    helm uninstall osac -n "$OSAC_NS"
+  fi
+  # The metering-rules protection is helm.sh/resource-policy: keep, so it
+  # survives the uninstall and then denies every configmap delete in the
+  # namespace sweep ("metering rule revisions must not be deleted"),
+  # hanging the namespace forever. Remove it before deleting the
+  # namespace; the reinstall re-creates it.
+  oc delete validatingadmissionpolicy osac-metering-protect-rules --ignore-not-found
+  oc delete validatingadmissionpolicybinding osac-metering-protect-rules --ignore-not-found
+  wait_names_gone 'the osac Helm release to disappear' "$WAIT_RELEASE" \
+    helm_release_name osac "$OSAC_NS" ||
+    fail 'the osac Helm release did not disappear'
+  wait_names_gone 'the AAP custom resource to be finalized' "$WAIT_AAP" \
+    kind_names_in aap "$OSAC_NS" ||
+    fail 'the AAP instance did not finish deleting; the aap-operator in ansible-aap must clear it'
+
+  if ! namespace_absent "$OSAC_NS"; then
+    note "deleting the $OSAC_NS namespace (this removes the AAP database volume)"
+    oc delete namespace "$OSAC_NS" --wait=false
+  fi
+  wait_names_gone "the $OSAC_NS namespace to be deleted" "$WAIT_NAMESPACE" \
+    namespace_name "$OSAC_NS" ||
+    fail "the $OSAC_NS namespace did not finish deleting"
+
+  tenants=$(tenant_namespaces)
+  if [ -n "$tenants" ]; then
+    note "deleting tenant namespaces:$(printf '%s' "$tenants" | tr '\n' ' ')"
+    local namespace
+    for namespace in $tenants; do
+      oc delete namespace "$namespace" --wait=false
+    done
+    wait_names_gone 'the tenant namespaces to be deleted' "$WAIT_NAMESPACE" \
+      tenant_namespaces ||
+      fail 'tenant namespaces did not finish deleting'
+  fi
+
+  # The osac CRDs carry helm.sh/resource-policy: keep, so helm uninstall
+  # leaves them behind. Delete them explicitly now that the strip has
+  # cleared their instances; a CRD with finalizer-bearing instances would
+  # refuse to go, which is exactly what the wait below catches.
+  crds=$(osac_crd_names)
+  if [ -n "$crds" ]; then
+    note "deleting the kept osac CRDs:$(printf '%s' "$crds" | tr '\n' ' ')"
+    local crd
+    for crd in $crds; do
+      oc delete crd "$crd" --wait=false
+    done
+  fi
+  wait_names_gone 'the osac CRDs to be removed' "$WAIT_NAMESPACE" \
+    osac_crd_names ||
+    fail 'the osac CRDs did not finish deleting; instances with finalizers are likely stuck'
+}
+
+phase_uninstall_infra() {
+  note '[5/7] uninstall infra'
+  local kind names pvcs
+  if [ "$(helm_release_status osac-infra "$INFRA_NS")" = absent ] &&
+    namespace_absent "$INFRA_NS" &&
+    namespace_absent keycloak &&
+    [ -z "$(kind_names_in kafka "$KAFKA_NS")" ] &&
+    [ -z "$(kind_names_in kafkanodepool "$KAFKA_NS")" ] &&
+    [ -z "$(kind_names_in kafkatopic "$KAFKA_NS")" ] &&
+    [ -z "$(kind_names_in pvc "$KAFKA_NS")" ]; then
+    note 'osac-infra, its namespaces and the Kafka data are already gone'
+    return 0
+  fi
+
+  # helm uninstall removes the release resources, including the
+  # postgres-data, openbao-data and keycloak-database volumes.
+  if [ "$(helm_release_status osac-infra "$INFRA_NS")" != absent ]; then
+    note 'helm uninstall osac-infra'
+    helm uninstall osac-infra -n "$INFRA_NS" --wait --timeout 10m
+  fi
+  if ! namespace_absent "$INFRA_NS"; then
+    note "deleting the $INFRA_NS namespace"
+    oc delete namespace "$INFRA_NS" --wait=false
+  fi
+  wait_names_gone "the $INFRA_NS namespace to be deleted" "$WAIT_NAMESPACE" \
+    namespace_name "$INFRA_NS" ||
+    fail "the $INFRA_NS namespace did not finish deleting"
+  if ! namespace_absent keycloak; then
+    note 'deleting the leftover keycloak namespace'
+    oc delete namespace keycloak --wait=false
+    wait_names_gone 'the keycloak namespace to be deleted' "$WAIT_NAMESPACE" \
+      namespace_name keycloak ||
+      fail 'the keycloak namespace did not finish deleting'
+  fi
+
+  # The Kafka CR, node pool, topics and broker volumes are applied by the
+  # infra hook job, not tracked by Helm, and the node pool keeps its
+  # volumes (deleteClaim: false). Remove them so the reinstall starts
+  # with an empty broker cluster.
+  names=$(kind_names_in kafkatopic "$KAFKA_NS")
+  if [ -n "$names" ]; then
+    note "deleting KafkaTopics:$(printf '%s' "$names" | tr '\n' ' ')"
+    oc -n "$KAFKA_NS" delete kafkatopic --all --wait=false
+    wait_names_gone 'the KafkaTopics to be finalized by the topic operator' "$WAIT_KAFKA" \
+      kind_names_in kafkatopic "$KAFKA_NS" ||
+      fail 'KafkaTopics did not finish deleting while the Kafka cluster was up'
+  fi
+  for kind in kafkanodepool kafka; do
+    names=$(kind_names_in "$kind" "$KAFKA_NS")
+    if [ -n "$names" ]; then
+      note "deleting $kind:$(printf '%s' "$names" | tr '\n' ' ')"
+      oc -n "$KAFKA_NS" delete "$kind" --all --wait=false
+    fi
+  done
+  wait_names_gone 'the Kafka custom resource to be removed' "$WAIT_KAFKA" \
+    kind_names_in kafka "$KAFKA_NS" ||
+    fail 'the Kafka custom resource did not disappear'
+  wait_names_gone 'the Kafka broker pods to stop' "$WAIT_KAFKA_PODS" \
+    kafka_pod_names ||
+    fail 'the Kafka broker pods did not stop'
+
+  check_strimzi_operator ||
+    fail 'the amq-streams cluster operator is not running in osac-kafka; the reinstall needs it'
+
+  pvcs=$(kind_names_in pvc "$KAFKA_NS")
+  if [ -n "$pvcs" ]; then
+    note "deleting the Kafka data volumes:$(printf '%s' "$pvcs" | tr '\n' ' ')"
+    oc -n "$KAFKA_NS" delete pvc --all --wait=false
+    wait_names_gone 'the Kafka data volumes to be released' "$WAIT_PVC" \
+      kind_names_in pvc "$KAFKA_NS" ||
+      fail 'Kafka data volumes did not finish deleting; a broker pod is likely still mounting one'
+  fi
+}
+
+check_strimzi_operator() {
+  oc -n "$KAFKA_NS" get deploy -o json | python3 -c '
+import json
+import sys
+
+items = json.load(sys.stdin)["items"]
+operators = [i for i in items if i["metadata"]["name"].startswith("amq-streams-cluster-operator")]
+if len(operators) != 1:
+    print("expected one amq-streams-cluster-operator deployment, found %d" % len(operators))
+    raise SystemExit(1)
+want = operators[0]["spec"]["replicas"]
+ready = (operators[0].get("status") or {}).get("readyReplicas", 0)
+if want != ready:
+    print("amq-streams-cluster-operator is %s/%s ready" % (ready, want))
+    raise SystemExit(1)
+print("the amq-streams cluster operator is ready")
+'
+}
+
+# The pinned installer worktree. It already exists (it is shared with
+# other work); the reset only verifies its pins, allows exactly the
+# schema patch as an uncommitted change, and keeps that patch applied.
+ensure_installer_worktree() {
+  local branch head
+  branch=$(git -C "$LAB_CHECKOUT" branch --show-current)
+  head=$(git -C "$LAB_CHECKOUT" rev-parse HEAD)
+  test "$branch" = "$LAB_INSTALL_BRANCH" ||
+    fail "installer worktree moved to branch '$branch', expected $LAB_INSTALL_BRANCH"
+  test "$head" = "$LAB_INSTALL_HEAD" ||
+    fail "installer worktree head moved to $head, expected the pin $LAB_INSTALL_HEAD"
+
+  if git -C "$LAB_CHECKOUT" status --porcelain |
+    grep -qvxF " M $SCHEMA_FILE"; then
+    fail "$LAB_CHECKOUT has unexpected local changes; the reset installs from it as-is"
+  fi
+
+  # The rebased chart schema rejects CI_GUEST_INGRESS_IP_RANGE; the
+  # one-key patch fixes it. The applied patch is the worktree's expected
+  # uncommitted state.
+  if grep -q CI_GUEST_INGRESS_IP_RANGE "$LAB_CHECKOUT/$SCHEMA_FILE"; then
+    note 'the CI ingress range schema patch is already applied'
+    return 0
+  fi
+  if git -C "$LAB_CHECKOUT" apply "$SCHEMA_PATCH" 2>/dev/null; then
+    note 'applied the CI ingress range schema patch'
+    return 0
+  fi
+  if git -C "$LAB_CHECKOUT" apply --reverse --check "$SCHEMA_PATCH" 2>/dev/null; then
+    note 'the CI ingress range schema patch is already applied'
+    return 0
+  fi
+  fail "cannot apply $SCHEMA_PATCH to the installer worktree"
+}
+
+# The infra chart's metal3 hook re-applies the Provisioning resource
+# without this field on every install-infra, and the pinned CI worker
+# setup needs it so Ironic accepts the hypervisor's virtual-media server over
+# plain HTTP. Restore it after every install-infra, as the full2 rebuild
+# did by hand.
+restore_ci_virtual_media() {
+  note 'restoring the CI virtual-media setting on the Provisioning resource'
+  oc apply -f - <<'EOF'
+apiVersion: metal3.io/v1alpha1
+kind: Provisioning
+metadata:
+  name: provisioning-configuration
+spec:
+  provisioningNetwork: "Disabled"
+  disableVirtualMediaTLS: true
+  watchAllNamespaces: true
+EOF
+  test "$(oc get provisioning provisioning-configuration -o jsonpath='{.spec.disableVirtualMediaTLS}')" = true ||
+    fail 'the Provisioning resource did not accept disableVirtualMediaTLS'
+  oc -n openshift-machine-api wait --for=condition=Ready pods \
+    -l baremetal.openshift.io/cluster-baremetal-operator=metal3-state \
+    --timeout="${WAIT_METAL3}s" ||
+    fail 'metal3 did not become ready after the Provisioning change'
+  note 'Ironic is ready with the CI virtual-media setting'
+}
+
+infra_already_installed() {
+  [ "$(helm_release_status osac-infra "$INFRA_NS")" = deployed ] || return 1
+  oc -n "$INFRA_NS" wait --for=condition=Available deployment/postgres --timeout=5s >/dev/null 2>&1 ||
+    return 1
+  oc -n "$KAFKA_NS" wait --for=condition=Ready "kafka/$KAFKA_NAME" --timeout=5s >/dev/null 2>&1 ||
+    return 1
+}
+
+instance_already_installed() {
+  [ "$(helm_release_status osac "$OSAC_NS")" = deployed ] || return 1
+  local readback expected
+  readback=$(oc -n "$OSAC_NS" get configmap cluster-fulfillment-ig \
+    -o 'jsonpath={.data.DNS_CLASS}{" "}{.data.EXTERNAL_ACCESS_BASE_DOMAIN}{" "}{.data.CI_GUEST_INGRESS_IP_RANGE}' 2>/dev/null) ||
+    return 1
+  expected="$LAB_DNS_CLASS $LAB_ZONE 192.168.$LAB_SUBNET.112-192.168.$LAB_SUBNET.114"
+  [ "$readback" = "$expected" ]
+}
+
+phase_reinstall() {
+  note '[6/7] reinstall'
+  ensure_installer_worktree
+
+  # The configure-kafka hook captures the amq-streams subscription's
+  # installedCSV once and then polls that name; a stale value during an
+  # OLM upgrade transition (the CSV was replaced by a newer one) makes it
+  # poll a CSV that no longer exists, forever. Settle the subscription
+  # before the make runs. The transition inside the make itself is a
+  # product bug; see FINDINGS.md.
+  if oc -n "$KAFKA_NS" get subscription amq-streams >/dev/null 2>&1; then
+    note 'waiting for the amq-streams subscription to settle'
+    local deadline=$((SECONDS + 300)) csv_name
+    while true; do
+      csv_name=$(oc -n "$KAFKA_NS" get subscription amq-streams -o jsonpath='{.status.installedCSV}')
+      if [ -n "$csv_name" ] &&
+        [ "$(oc -n "$KAFKA_NS" get csv "$csv_name" -o jsonpath='{.status.phase}' 2>/dev/null)" = Succeeded ]; then
+        note "amq-streams subscription settled on $csv_name"
+        break
+      fi
+      if [ "$SECONDS" -ge "$deadline" ]; then
+        fail 'the amq-streams subscription did not settle (installedCSV missing or not Succeeded)'
+      fi
+      sleep 10
+    done
+  fi
+
+  if infra_already_installed; then
+    note 'osac-infra is deployed and healthy; skipping install-infra'
+  else
+    note 'installing osac-infra from the pinned worktree (the first run downloads chart dependencies)'
+    make -C "$LAB_CHECKOUT/osac-installer" install-infra PLATFORM=openshift PROFILE=full-ci NS="$OSAC_NS" \
+      INFRA_VALUES_EXTRA='-f values/full-ci/quota-demo-infra.yaml'
+    oc -n "$INFRA_NS" wait --for=condition=Available deployment/postgres --timeout=300s
+    oc -n "$KAFKA_NS" wait --for=condition=Ready "kafka/$KAFKA_NAME" --timeout=300s
+    note 'osac-infra is deployed; PostgreSQL and Kafka are ready'
+  fi
+  restore_ci_virtual_media
+
+  # The reinstall never touches the workers; this is a cheap invariant
+  # check before the long install-osac wait.
+  wait_workers_available 60 ||
+    fail 'the workers are not available; fix host-inventory before installing OSAC'
+
+  if instance_already_installed; then
+    note 'osac is deployed with the lab overlay; skipping install-osac'
+  else
+    note 'installing osac from the pinned worktree with the AAP license'
+    make -C "$LAB_CHECKOUT/osac-installer" install-osac PLATFORM=openshift PROFILE=full-ci NS="$OSAC_NS" \
+      AAP_LICENSE_FILE="$AAP_LICENSE_FILE" \
+      INFRA_VALUES_EXTRA='-f values/full-ci/quota-demo-infra.yaml' \
+      INSTANCE_VALUES_EXTRA="-f values/full-ci/quota-demo.yaml -f $LAB_DNS_DIR/$LAB_DNS_OVERLAY -f $LAB_DNS_DIR/$LAB_DNS_SECRETS -f $demo/environment/install/pinned-images.yaml"
+    local readback expected
+    readback=$(oc -n "$OSAC_NS" get configmap cluster-fulfillment-ig \
+      -o 'jsonpath={.data.DNS_CLASS}{" "}{.data.EXTERNAL_ACCESS_BASE_DOMAIN}{" "}{.data.CI_GUEST_INGRESS_IP_RANGE}')
+    expected="$LAB_DNS_CLASS $LAB_ZONE 192.168.$LAB_SUBNET.112-192.168.$LAB_SUBNET.114"
+    test "$readback" = "$expected" ||
+      fail "instance-group readback is '$readback', expected '$expected'"
+    note "instance-group readback: $readback"
+  fi
+}
+
+phase_verify() {
+  note '[7/7] verify'
+  bash "$demo/environment/install/check-lab-ready.sh" "$lab"
+  check_workers ||
+    fail 'the workers are not in the fresh-install state'
+  test "$(oc get provisioning provisioning-configuration -o jsonpath='{.spec.disableVirtualMediaTLS}')" = true ||
+    fail 'the CI virtual-media setting is missing from the Provisioning resource'
+  note 'the lab matches the fresh-install starting position'
+}
+
+phase_preflight
+phase_teardown_guests
+phase_stop_and_strip
+phase_uninstall_osac
+phase_uninstall_infra
+phase_reinstall
+phase_verify
+note 'factory reset finished'

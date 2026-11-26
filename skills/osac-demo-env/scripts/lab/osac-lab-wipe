@@ -1,0 +1,469 @@
+#!/usr/bin/env bash
+# Fast demo-state reset for an OSAC lab: minutes, not tens of minutes.
+#
+#   osac-lab-wipe <lab> --yes
+#
+# Scales every OSAC deployment down, strips the custom resources, deletes
+# the tenant and guest namespaces, wipes the databases in place (keeping
+# the install-seeded rows), empties the Kafka event topics, removes any
+# billing rules beyond 0001, and scales everything back up.
+#
+# What is preserved:
+#   - the OSAC and AAP installations themselves (no helm, no volume wipes)
+#   - the install-seeded database rows: the system and shared tenants and
+#     their default projects, the predefined roles, the catalog templates,
+#     the rhcos disk image, the storage tiers and backends, the network
+#     class row, the hub row, the installation settings
+#   - Keycloak: existing users and organizations survive; the demo setup
+#     tolerates them (its ensure paths accept AlreadyExists)
+#   - the six BMH workers when they are already available (the normal
+#     post-demo state)
+#
+# What is removed:
+#   - every tenant row except system and shared, with all their projects,
+#     VMs, volumes, clusters, networking, quota and catalog entries
+#   - all metering data and every approved billing rule except 0001
+#   - the Kafka event topics' contents (the topics are deleted and are
+#     recreated empty when tenants reappear)
+#   - the tenant and guest namespaces on the hub
+#
+# When NOT to use this: ClusterOrders still exist (a cluster is installed
+# or deprovisioning). Their teardown releases the BMH workers and must go
+# through OSAC - the factory reset (osac-lab-reset) handles that. This
+# script refuses to run in that state.
+set -Eeuo pipefail
+umask 077
+
+lab_dir=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+demo=$(cd "$lab_dir/../.." && pwd)
+
+usage() {
+  printf 'Usage: osac-lab-wipe <lab> --yes\n' >&2
+  printf 'Labs: full, full2 (see lab-config.sh). --yes is required; the\n' >&2
+  printf 'script then asks you to type the lab name before changing anything.\n' >&2
+}
+
+lab=${1:-}
+[ $# -ge 1 ] || { usage; exit 1; }
+shift
+case "$lab" in
+  full|full2) ;;
+  *) usage; exit 1 ;;
+esac
+assumed_yes=no
+for argument in "$@"; do
+  case "$argument" in
+    --yes) assumed_yes=yes ;;
+    *) usage; exit 1 ;;
+  esac
+done
+[ "$assumed_yes" = yes ] || { usage; exit 1; }
+
+# shellcheck source=lab-config.sh
+. "$lab_dir/lab-config.sh"
+# shellcheck source=lab-lib.sh
+. "$lab_dir/lab-lib.sh"
+
+export KUBECONFIG="$LAB_KUBECONFIG"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/osac-lab-wipe.XXXXXXXX")
+errfile=$WORK/command-error.log
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/osac-lab-wipe"
+replica_state="$state_dir/$lab.replicas"
+
+fail() {
+  printf '%s: %s\n' "$lab" "$*" >&2
+  exit 1
+}
+
+note() {
+  printf '%s: %s\n' "$lab" "$*"
+}
+
+
+
+
+
+
+
+
+
+write_wipe_sql() {
+  cat > "$WORK/service-wipe.sql" <<'SQL'
+do $$
+declare
+  r record;
+  stmt text;
+  n bigint;
+  round_failed boolean;
+  rounds int := 0;
+begin
+  -- Pass 1 (multi-round): delete the non-builtin rows. Foreign keys
+  -- require children to go before parents and the table iteration order
+  -- is not deterministic, so each round attempts every table and retries
+  -- the ones whose foreign keys still block them, until a full round
+  -- succeeds. Ten rounds is far beyond the schema's dependency depth; if
+  -- it does not converge, something structural is wrong and the wipe
+  -- must fail loudly instead of looping.
+  loop
+    rounds := rounds + 1;
+    if rounds > 10 then
+      raise exception 'the wipe did not converge after 10 rounds; a foreign key still blocks a delete';
+    end if;
+    round_failed := false;
+    for r in
+      select t.table_name,
+             exists (select 1 from information_schema.columns c
+                      where c.table_schema = 'public'
+                        and c.table_name = t.table_name
+                        and c.column_name = 'tenant') as has_tenant,
+             exists (select 1 from information_schema.columns c
+                      where c.table_schema = 'public'
+                        and c.table_name = t.table_name
+                        and c.column_name = 'tenants') as has_tenants
+        from information_schema.tables t
+       where t.table_schema = 'public'
+         and t.table_name <> 'schema_migrations'
+         and t.table_name !~ '^(active_|archived_)'
+       order by t.table_name
+    loop
+      if r.table_name in ('installation_settings', 'storage_tier_backends') then
+        continue;
+      elsif r.has_tenant then
+        stmt := format('with del as (delete from %I where tenant not in (''system'', ''shared'') returning 1) select count(*) from del', r.table_name);
+      elsif r.has_tenants then
+        stmt := format('with del as (delete from %I where not (tenants && array[''system'', ''shared'']) returning 1) select count(*) from del', r.table_name);
+      else
+        stmt := format('with del as (delete from %I returning 1) select count(*) from del', r.table_name);
+      end if;
+      begin
+        execute stmt into n;
+      exception when foreign_key_violation then
+        round_failed := true;
+      end;
+    end loop;
+    exit when not round_failed;
+  end loop;
+
+  -- Pass 2: the id-only registries (active_*, archived_*). Remove the ids
+  -- whose base row is gone; the built-ins' ids stay.
+  for r in
+    select t.table_name,
+           regexp_replace(t.table_name, '^(active_|archived_)', '') as base_name,
+           (select count(*) from information_schema.columns c
+             where c.table_schema = 'public' and c.table_name = t.table_name) = 1 as id_only
+      from information_schema.tables t
+     where t.table_schema = 'public'
+       and t.table_name ~ '^(active_|archived_)'
+    loop
+      if r.id_only and exists (select 1 from information_schema.tables b
+                                 where b.table_schema = 'public'
+                                   and b.table_name = r.base_name) then
+        execute format('delete from %I where id not in (select id from %I)', r.table_name, r.base_name);
+      end if;
+    end loop;
+
+  -- Pass 3: the change log LAST. The deletes above fire enqueue_change
+  -- triggers that append rows about the removed objects; a pass that ran
+  -- earlier would leave them behind. The changes table has no tenancy
+  -- column, so every row goes.
+  execute 'delete from changes';
+end $$;
+SQL
+}
+
+phase_preflight() {
+  note '[1/6] preflight'
+  command -v oc >/dev/null || fail 'oc is not on PATH'
+  test -r "$LAB_KUBECONFIG" || fail "kubeconfig $LAB_KUBECONFIG is not readable"
+  local server domain
+  server=$(oc --request-timeout=12s config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+  test "$server" = "$LAB_API_SERVER" ||
+    fail "kubeconfig points at $server, expected $LAB_API_SERVER"
+  domain=$(oc --request-timeout=12s get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+  test "$domain" = "$LAB_DOMAIN" ||
+    fail "hub ingress domain is $domain, expected $LAB_DOMAIN"
+
+  local orders
+  orders=$(kind_names_in clusterorders "$OSAC_NS")
+  [ -z "$orders" ] ||
+    fail "ClusterOrders still exist ($orders); their teardown releases the BMH workers and must go through OSAC. Run osac-lab-reset instead, or delete the clusters through the API first."
+
+  # Dress rehearsal: run the exact wipe SQL inside a transaction that is
+  # always rolled back, so a wrong schema assumption (a column the SQL
+  # expects does not exist) fails HERE, before anything is scaled down,
+  # instead of mid-wipe.
+  write_wipe_sql
+  note 'dress rehearsal: validating the wipe SQL against the live schema'
+  oc -n "$INFRA_NS" exec -i deployment/postgres -c server -- \
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d osac_service \
+    -c 'begin' -f - -c 'rollback' < <(cat "$WORK/service-wipe.sql") >/dev/null ||
+    fail 'the wipe SQL does not validate against the current database schema'
+  note 'the wipe SQL validates'
+
+  printf '%s: this wipe REMOVES on %s:\n' "$lab" "$LAB_API_SERVER"
+  printf '  every tenant except the built-in system and shared tenants\n'
+  printf '  every VM, volume, project, quota row and catalog entry\n'
+  printf '  all metering data and every billing rule except 0001\n'
+  printf '%s: this wipe KEEPS: the OSAC and AAP installations, Keycloak\n' "$lab"
+  printf 'users, the install-seeded database rows, and the workers.\n'
+  printf 'Type the lab name "%s" to continue: ' "$lab"
+  local answer
+  if ! IFS= read -r answer; then
+    fail 'no confirmation could be read; nothing was changed'
+  fi
+  test "$answer" = "$lab" ||
+    fail 'confirmation did not match the lab name; nothing was changed'
+}
+
+phase_scale_down() {
+  note '[2/6] scale the OSAC deployments down'
+  mkdir -p "$state_dir"
+  : > "$WORK/replicas.txt"
+  local deploy replicas recorded=0
+  while IFS= read -r deploy; do
+    deploy=${deploy#deployment.apps/}
+    case "$deploy" in
+      osac-aap-*) continue ;;
+      # The console proxy serves the console.osac.openshift.io APIService;
+      # Kubernetes namespace deletion needs its discovery, so it stays up.
+      osac-operator-console-proxy) continue ;;
+    esac
+    replicas=$(oc -n "$OSAC_NS" get deploy "$deploy" -o jsonpath='{.spec.replicas}')
+    if [ "$replicas" != 0 ]; then
+      oc -n "$OSAC_NS" scale deploy "$deploy" --replicas=0
+      printf '%s %s\n' "$deploy" "$replicas" >> "$WORK/replicas.txt"
+      recorded=1
+    fi
+  done < <(oc -n "$OSAC_NS" get deploy -o name)
+  if [ "$recorded" = 1 ]; then
+    note "scaled down $(wc -l < "$WORK/replicas.txt") deployments (AAP untouched)"
+    cp "$WORK/replicas.txt" "$replica_state"
+    return 0
+  fi
+  # Already scaled down by a failed earlier run: restore from the saved
+  # counts, or default to one replica per deployment.
+  if [ -s "$replica_state" ]; then
+    cp "$replica_state" "$WORK/replicas.txt"
+    note "deployments already down; using the saved replica counts"
+  else
+    while IFS= read -r deploy; do
+      deploy=${deploy#deployment.apps/}
+      case "$deploy" in osac-aap-*) continue ;; esac
+      printf '%s 1\n' "$deploy" >> "$WORK/replicas.txt"
+    done < <(oc -n "$OSAC_NS" get deploy -o name)
+    note "deployments already down and no saved counts; defaulting to one replica each"
+  fi
+}
+
+phase_strip() {
+  note '[3/6] strip the custom resources'
+  strip_all_kinds
+}
+
+phase_namespaces() {
+  note '[4/6] delete the tenant and guest namespaces'
+  local namespaces namespace
+  namespaces=$(tenant_namespaces)
+  if [ -n "$namespaces" ]; then
+    note "deleting tenant namespaces:$(printf '%s' "$namespaces" | tr '\n' ' ')"
+    for namespace in $namespaces; do
+      oc delete namespace "$namespace" --wait=false
+    done
+  fi
+  namespaces=$(guest_namespaces)
+  if [ -n "$namespaces" ]; then
+    note "deleting guest namespaces:$(printf '%s' "$namespaces" | tr '\n' ' ')"
+    for namespace in $namespaces; do
+      oc delete namespace "$namespace" --wait=false
+    done
+  fi
+  wait_names_gone 'the tenant namespaces to be deleted' "$WIPE_WAIT_NAMESPACES" \
+    tenant_namespaces ||
+    fail 'tenant namespaces did not finish deleting'
+  wait_names_gone 'the guest namespaces to be deleted' "$WIPE_WAIT_NAMESPACES" \
+    guest_namespaces ||
+    fail 'guest namespaces did not finish deleting'
+}
+
+psql_service() { # arguments pass through to psql
+  oc -n "$INFRA_NS" exec -i deployment/postgres -c server -- \
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d osac_service "$@"
+}
+
+phase_wipe_data() {
+  note '[5/6] wipe the data'
+
+  note 'metering: truncating all six tables'
+  oc -n "$INFRA_NS" exec -i deployment/postgres -c server -- \
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d osac_metering \
+    -c 'truncate history, ledger, outbox, progress, replayed_heartbeats, rule_revisions'
+
+  note 'service: deleting every non-builtin row, keeping the install seeds'
+  oc -n "$INFRA_NS" exec -i deployment/postgres -c server -- \
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d osac_service -f - \
+    < "$WORK/service-wipe.sql"
+
+  local tenants_left
+  tenants_left=$(psql_service -tAc "select count(*) from tenants")
+  [ "$tenants_left" = 2 ] ||
+    fail "expected exactly the system and shared tenants after the wipe, found $tenants_left"
+
+  note 'kafka: deleting the runtime event topics'
+  wipe_kafka_topics
+
+  note 'billing rules: removing every revision beyond 0001'
+  local configmap
+  for configmap in $(oc -n "$OSAC_NS" get configmap -o name |
+      sed -n 's|^configmap/osac-metering-rules-||p' | grep -vw 0001); do
+    note "deleting rules configmap $configmap"
+    oc -n "$OSAC_NS" delete configmap "osac-metering-rules-$configmap"
+  done
+}
+
+# Delete the runtime-created Kafka topics: the per-tenant event topics
+# (osac.events.*), the per-tenant metering heartbeat topics and the
+# per-tenant metering dead-letter topics. The fulfillment service recreates
+# the event topics when tenants reappear and metering recreates its
+# heartbeat and dead-letter topics on startup. The chart-rendered topics
+# (osac.metering.inference and its dlq) are KEPT: nothing recreates them
+# without a helm upgrade, and the usage-report pipeline depends on them.
+# The KafkaTopic CRs are likewise left alone for the same reason.
+wipe_kafka_topics() {
+  local broker props topics topic password
+  broker=$(oc -n "$KAFKA_NS" get pods -l strimzi.io/name="${KAFKA_NAME}-kafka" \
+    -o jsonpath='{.items[0].metadata.name}')
+  [ -n "$broker" ] || fail 'no Kafka broker pod found'
+
+  oc -n "$KAFKA_NS" apply -f - >/dev/null <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaUser
+metadata:
+  name: osac-lab-wipe
+  labels:
+    strimzi.io/cluster: "$KAFKA_NAME"
+spec:
+  authentication:
+    type: scram-sha-512
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          patternType: prefix
+          name: osac.
+        operations: [Delete, Describe, Read]
+EOF
+
+  local deadline=$((SECONDS + 120))
+  until password=$(oc -n "$KAFKA_NS" get secret osac-lab-wipe \
+      -o jsonpath='{.data.password}' 2>/dev/null | base64 -d) && [ -n "$password" ]; do
+    [ "$SECONDS" -ge "$deadline" ] && { oc -n "$KAFKA_NS" delete kafkauser osac-lab-wipe --ignore-not-found; fail 'the temporary KafkaUser secret did not appear'; }
+    sleep 5
+  done
+
+  # The tls listener's certificate is issued by cert-manager's default-ca
+  # ClusterIssuer, not by the Strimzi cluster CA, so default-ca is the
+  # certificate the client has to trust.
+  oc -n cert-manager get secret default-ca -o jsonpath='{.data.tls\.crt}' |
+    base64 -d > "$WORK/ca.pem"
+  oc cp "$WORK/ca.pem" "$KAFKA_NS/$broker:/tmp/osac-lab-wipe-ca.pem" >/dev/null
+  printf '%s' "$password" > "$WORK/password"
+  oc cp "$WORK/password" "$KAFKA_NS/$broker:/tmp/osac-lab-wipe-password" >/dev/null
+
+  # The listener certificate has no SAN for localhost, so the client must
+  # connect through the bootstrap service name.
+  local bootstrap="${KAFKA_NAME}-kafka-bootstrap.${KAFKA_NS}.svc.cluster.local:9093"
+  oc -n "$KAFKA_NS" exec "$broker" -- bash -c '
+    keytool -importcert -file /tmp/osac-lab-wipe-ca.pem \
+      -keystore /tmp/osac-lab-wipe-truststore.p12 -storetype PKCS12 \
+      -storepass changeit -noprompt >/dev/null
+    cat > /tmp/osac-lab-wipe.properties <<PROPS
+security.protocol=SASL_SSL
+sasl.mechanism=SCRAM-SHA-512
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="osac-lab-wipe" password="$(cat /tmp/osac-lab-wipe-password)";
+ssl.truststore.location=/tmp/osac-lab-wipe-truststore.p12
+ssl.truststore.password=changeit
+PROPS
+    bin/kafka-topics.sh --bootstrap-server '"$bootstrap"' \
+      --command-config /tmp/osac-lab-wipe.properties --list
+  ' > "$WORK/all-topics.txt" 2>"$errfile" || { cat "$errfile" >&2; fail 'listing Kafka topics failed'; }
+  # No match here is a valid state (nothing to delete); a failed list above
+  # is not, and fails the wipe.
+  grep -E '^osac\.(events\.|metering\.(heartbeat|dlq)\.)' "$WORK/all-topics.txt" > "$WORK/topics.txt" || true
+
+  while IFS= read -r topic; do
+    [ -n "$topic" ] || continue
+    note "deleting kafka topic $topic"
+    oc -n "$KAFKA_NS" exec "$broker" -- bin/kafka-topics.sh \
+      --bootstrap-server "$bootstrap" \
+      --command-config /tmp/osac-lab-wipe.properties --delete --topic "$topic"
+  done < "$WORK/topics.txt"
+
+  oc -n "$KAFKA_NS" exec "$broker" -- rm -f \
+    /tmp/osac-lab-wipe-ca.pem /tmp/osac-lab-wipe-password \
+    /tmp/osac-lab-wipe-truststore.p12 /tmp/osac-lab-wipe.properties
+  oc -n "$KAFKA_NS" delete kafkauser osac-lab-wipe --ignore-not-found
+  rm -f "$WORK/password" "$WORK/ca.pem"
+}
+
+phase_scale_up() {
+  note '[6/6] scale up and wait for ready'
+  local deploy replicas
+  while read -r deploy replicas; do
+    oc -n "$OSAC_NS" scale deploy "$deploy" --replicas="$replicas"
+  done < "$WORK/replicas.txt"
+
+  local deadline=$((SECONDS + WIPE_WAIT_READY)) deployments_left
+  while true; do
+    deployments_left=$(oc -n "$OSAC_NS" get deploy -o json | python3 -c '
+import json, sys
+items = json.load(sys.stdin)["items"]
+bad = []
+for item in items:
+    name = item["metadata"]["name"]
+    if name.startswith("osac-aap-"):
+        continue
+    want = item["spec"].get("replicas") or 0
+    ready = (item.get("status") or {}).get("readyReplicas") or 0
+    if want != ready:
+        bad.append("%s %d/%d" % (name, ready, want))
+print("\n".join(bad))
+')
+    if [ -z "$deployments_left" ]; then
+      note 'all OSAC deployments are ready'
+      break
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      printf '%s: deployments did not become ready:\n%s\n' "$lab" "$deployments_left" >&2
+      return 1
+    fi
+    printf '%s: waiting for deployments: %s\n' "$lab" "$(printf '%s' "$deployments_left" | tr '\n' ' ')"
+    sleep 10
+  done
+
+  note 'waiting for metering to approve billing rules 0001'
+  deadline=$((SECONDS + 180))
+  local revisions
+  while true; do
+    revisions=$(oc -n "$INFRA_NS" exec deployment/postgres -c server -- \
+      psql -X -U postgres -d osac_metering -tAc 'select revision from rule_revisions order by revision' 2>/dev/null || true)
+    if [ "$revisions" = 0001 ]; then
+      note 'metering approved billing rules 0001'
+      break
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      fail "metering did not approve rules 0001 (found: $(printf '%s' "$revisions" | tr '\n' ' '))"
+    fi
+    sleep 5
+  done
+
+  bash "$demo/environment/install/check-lab-ready.sh" "$lab"
+  note 'wipe finished; the lab matches the demo starting position'
+}
+
+phase_preflight
+phase_scale_down
+phase_strip
+phase_namespaces
+phase_wipe_data
+phase_scale_up

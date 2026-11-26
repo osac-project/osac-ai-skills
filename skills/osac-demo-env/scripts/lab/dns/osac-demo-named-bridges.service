@@ -1,0 +1,13 @@
+[Unit]
+Description=Bridge addresses for the OSAC demo BIND DNS service
+After=libvirtd.service network-online.target
+Wants=network-online.target
+Before=osac-demo-named.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/osac-demo-named-bridges.sh --boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

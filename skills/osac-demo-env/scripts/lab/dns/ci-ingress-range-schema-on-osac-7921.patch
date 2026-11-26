@@ -1,0 +1,15 @@
+diff --git a/osac-installer/charts/osac/values.schema.json b/osac-installer/charts/osac/values.schema.json
+index a2fdc8178..a30cf4802 100644
+--- a/osac-installer/charts/osac/values.schema.json
++++ b/osac-installer/charts/osac/values.schema.json
+@@ -1414,6 +1414,10 @@
+                       "type": "string",
+                       "description": "DNS zone to operate in (defaults to EXTERNAL_ACCESS_BASE_DOMAIN). With dns.rfc2136.dns, the zone configured on the DNS server."
+                     },
++                    "CI_GUEST_INGRESS_IP_RANGE": {
++                      "type": "string",
++                      "description": "Provider-reserved IPv4 range for guest ingress VIPs on the CI cluster template"
++                    },
+                     "DNS_SERVER": {
+                       "type": "string",
+                       "maxLength": 253,

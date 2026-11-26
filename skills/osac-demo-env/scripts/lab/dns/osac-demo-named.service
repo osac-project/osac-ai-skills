@@ -1,0 +1,18 @@
+[Unit]
+Description=OSAC demo guest DNS (BIND) for full and full2
+After=network.target osac-demo-named-bridges.service
+Requires=osac-demo-named-bridges.service
+# 127.0.0.54:53 must not be shared with the retired dnsmasq listener.
+Conflicts=osac-demo-dns.service
+
+[Service]
+Type=forking
+PIDFile=/run/named/osac-demo-named.pid
+ExecStartPre=/usr/sbin/named-checkconf -z /etc/named/osac-demo-named.conf
+ExecStart=/usr/sbin/named -u named -c /etc/named/osac-demo-named.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
