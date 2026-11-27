@@ -40,10 +40,14 @@ make test-kustomize
 
 ## osac-aap
 
+Sync from the AAP lockfile in locked mode so lint uses the same `ansible-lint`
+version as CI, without maintaining a second version pin in this skill.
+
 ```bash
 cd "$REPO_DIR/osac-aap"
+uv sync --locked --all-extras --group development
 make test
-uv run ansible-lint
+uv run ansible-lint .
 ```
 
 ## osac-installer
